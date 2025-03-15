@@ -2,48 +2,30 @@
 #include <iostream>
 #include <filesystem>
 
-// Global texture map to store all piece textures
-std::map<std::string, sf::Texture> pieceTextures;
-float currentPieceScale = 1.0f; // Store current scale factor
+// Initialize static instance pointer
+PieceTextureManager* PieceTextureManager::instance = nullptr;
 
-// Mapping of FEN characters to piece types
-const std::map<char, PieceType> FEN_TO_PIECE_TYPE = {
-    {'p', PieceType::PAWN},   {'P', PieceType::PAWN},
-    {'r', PieceType::ROOK},   {'R', PieceType::ROOK},
-    {'n', PieceType::KNIGHT}, {'N', PieceType::KNIGHT},
-    {'b', PieceType::BISHOP}, {'B', PieceType::BISHOP},
-    {'q', PieceType::QUEEN},  {'Q', PieceType::QUEEN},
-    {'k', PieceType::KING},   {'K', PieceType::KING}
-};
-
-// Get list of piece filenames
-std::vector<std::string> getPieceFilenames() {
-    return {
-        "white-pawn", "white-rook", "white-knight", "white-bishop", "white-queen", "white-king",
-        "black-pawn", "black-rook", "black-knight", "black-bishop", "black-queen", "black-king"
-    };
+// Get singleton instance
+PieceTextureManager& PieceTextureManager::getInstance() {
+    if (!instance) {
+        instance = new PieceTextureManager();
+    }
+    return *instance;
 }
 
-// Function to load a single texture with error handling
-bool loadTextureWithErrorHandling(const std::string& filename, sf::Texture& texture) {
-    // Verify file exists
-    std::filesystem::path filePath(filename);
-    if (!std::filesystem::exists(filePath)) {
-        std::cerr << "Texture file not found: " << filename << std::endl;
-        return false;
+// Get a texture from the manager
+const sf::Texture* PieceTextureManager::getTexture(const std::string& key) const {
+    auto it = textures.find(key);
+    if (it != textures.end()) {
+        return &(it->second);
     }
-
-    if (!texture.loadFromFile(filename)) {
-        std::cerr << "Failed to load texture: " << filename << std::endl;
-        return false;
-    }
-    return true;
+    return nullptr;
 }
 
-// Function to load all piece textures (using hyphen format)
-bool loadPieceTextures(float scaleFactor) {
-    bool allLoaded = true;
-    currentPieceScale = scaleFactor; // Store the scale factor for future use
+// Load all piece textures
+bool PieceTextureManager::loadTextures(float scaleFactor) {
+    currentScale = scaleFactor;
+    textures.clear();
     
     // Check if pieces directory exists
     std::filesystem::path piecesDir("./pieces");
@@ -57,22 +39,53 @@ bool loadPieceTextures(float scaleFactor) {
         return false;
     }
     
-    // Get all piece filenames
-    const auto pieces = getPieceFilenames();
+    // Piece filenames 
+    const std::vector<std::string> pieceNames = {
+        "white-pawn", "white-rook", "white-knight", "white-bishop", "white-queen", "white-king",
+        "black-pawn", "black-rook", "black-knight", "black-bishop", "black-queen", "black-king"
+    };
+    
+    bool allLoaded = true;
     
     // Load each texture
-    for (const auto& piece : pieces) {
+    for (const auto& piece : pieceNames) {
         std::string filename = "./pieces/" + piece + ".png";
-        sf::Texture texture;
-        if (loadTextureWithErrorHandling(filename, texture)) {
-            texture.setSmooth(true); // Enable smooth scaling
-            pieceTextures[piece] = texture;
-        } else {
+        
+        // Verify file exists
+        std::filesystem::path filePath(filename);
+        if (!std::filesystem::exists(filePath)) {
+            std::cerr << "Texture file not found: " << filename << std::endl;
             allLoaded = false;
+            continue;
         }
+        
+        sf::Texture texture;
+        if (!texture.loadFromFile(filename)) {
+            std::cerr << "Failed to load texture: " << filename << std::endl;
+            allLoaded = false;
+            continue;
+        }
+        
+        texture.setSmooth(true); // Enable smooth scaling
+        textures[piece] = std::move(texture);
     }
     
     return allLoaded;
+}
+
+// Mapping of FEN characters to piece types
+const std::map<char, PieceType> FEN_TO_PIECE_TYPE = {
+    {'p', PieceType::PAWN},   {'P', PieceType::PAWN},
+    {'r', PieceType::ROOK},   {'R', PieceType::ROOK},
+    {'n', PieceType::KNIGHT}, {'N', PieceType::KNIGHT},
+    {'b', PieceType::BISHOP}, {'B', PieceType::BISHOP},
+    {'q', PieceType::QUEEN},  {'Q', PieceType::QUEEN},
+    {'k', PieceType::KING},   {'K', PieceType::KING}
+};
+
+// Backwards compatibility function
+bool loadPieceTextures(float scaleFactor) {
+    return PieceTextureManager::getInstance().loadTextures(scaleFactor);
 }
 
 // Get piece color from FEN character
@@ -102,6 +115,7 @@ std::string getTextureKeyFromFEN(char fenChar) {
 void setupPositionFromFEN(std::map<std::pair<int, int>, ChessPiece>& pieces, const std::string& fen) {
     pieces.clear();
     const float SQUARE_SIZE = 100.0f;
+    auto& textureManager = PieceTextureManager::getInstance();
     
     // Parse board position (first part of FEN)
     std::string boardFEN = fen.substr(0, fen.find(' '));
@@ -120,21 +134,23 @@ void setupPositionFromFEN(std::map<std::pair<int, int>, ChessPiece>& pieces, con
         } else if (std::isalpha(c)) {
             // Place a piece
             std::string textureKey = getTextureKeyFromFEN(c);
+            const sf::Texture* texture = textureManager.getTexture(textureKey);
             
-            if (!textureKey.empty() && pieceTextures.find(textureKey) != pieceTextures.end()) {
+            if (!textureKey.empty() && texture) {
                 ChessPiece piece{
                     FEN_TO_PIECE_TYPE.at(c),
                     getColorFromFEN(c),
-                    sf::Sprite(pieceTextures[textureKey])
+                    sf::Sprite(*texture)
                 };
                 
                 // Calculate center positions to place pieces
-                float textureWidth = piece.sprite.getTexture()->getSize().x;
-                float textureHeight = piece.sprite.getTexture()->getSize().y;
+                float textureWidth = texture->getSize().x;
+                float textureHeight = texture->getSize().y;
                 
-                // Apply the scaling factor (10% bigger)
-                float scaleX = (SQUARE_SIZE / textureWidth) * currentPieceScale;
-                float scaleY = (SQUARE_SIZE / textureHeight) * currentPieceScale;
+                // Apply the scaling factor
+                float scaleFactor = textureManager.getScale();
+                float scaleX = (SQUARE_SIZE / textureWidth) * scaleFactor;
+                float scaleY = (SQUARE_SIZE / textureHeight) * scaleFactor;
                 piece.sprite.setScale(scaleX, scaleY);
                 
                 // Center the piece in its square

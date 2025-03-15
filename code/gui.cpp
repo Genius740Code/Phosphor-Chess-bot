@@ -1,5 +1,6 @@
 #include <SFML/Graphics.hpp> // Include SFML graphics header
 #include <iostream>
+#include "gui.h"
 #include "pieces_placement.h" // Include the pieces placement header
 
 // Constants for chess board configuration
@@ -14,44 +15,40 @@ const float PIECE_SCALE_FACTOR = 1.1f;       // Make pieces 10% bigger
 // Standard starting position in FEN notation
 const std::string INITIAL_POSITION_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-void createChessGrid() {
-    // Ask user for input - simplified message
-    std::cout << "Starting Chess Board Application...\n"
-              << "This is a chess board with pieces in starting position (FEN notation)\n"
-              << "Type 1 to open the chess board window: ";
+// Implementation of the ChessBoard class
+ChessBoard::ChessBoard() : 
+    currentFEN(INITIAL_POSITION_FEN),
+    window(sf::VideoMode(WINDOW_SIZE, WINDOW_SIZE), 
+           "Chess Board", 
+           sf::Style::Titlebar | sf::Style::Close)
+{
+}
+
+bool ChessBoard::initialize(float pieceScaleFactor) {
+    // Set up window
+    sf::ContextSettings settings;
+    settings.antialiasingLevel = 8;
+    window.setVerticalSyncEnabled(true);
+    window.setFramerateLimit(60);
     
-    std::string input;
-    std::cin >> input;
-    
-    // Only proceed if user entered "1"
-    if (input != "1") {
-        std::cout << "Chess board not displayed." << std::endl;
-        return;
-    }
+    // Create board texture
+    createBoardTexture();
     
     // Load chess piece textures
-    if (!loadPieceTextures(PIECE_SCALE_FACTOR)) {
-        std::cout << "Warning: Some chess pieces could not be loaded.\n"
+    if (!loadPieceTextures(pieceScaleFactor)) {
+        std::cerr << "Warning: Some chess pieces could not be loaded.\n"
                   << "Make sure the 'pieces' folder exists with all piece images.\n"
                   << "Required naming format: white-rook.png, black-knight.png, etc." << std::endl;
+        return false;
     }
     
-    // Initialize SFML window with proper settings
-    sf::ContextSettings settings;
-    settings.antialiasingLevel = 8; // Enable antialiasing for smoother rendering
+    // Setup initial position
+    setPosition(currentFEN);
     
-    sf::RenderWindow window(
-        sf::VideoMode(WINDOW_SIZE, WINDOW_SIZE),
-        "Chess Board",
-        sf::Style::Titlebar | sf::Style::Close,
-        settings
-    );
-    
-    window.setVerticalSyncEnabled(true);
-    window.setFramerateLimit(60); // Limit framerate to reduce CPU usage
-    
-    // Create and render the chess board texture (only once, for efficiency)
-    sf::RenderTexture boardTexture;
+    return true;
+}
+
+void ChessBoard::createBoardTexture() {
     boardTexture.create(WINDOW_SIZE, WINDOW_SIZE);
     boardTexture.clear(BACKGROUND);
     
@@ -65,30 +62,68 @@ void createChessGrid() {
         }
     }
     boardTexture.display();
-    
-    // Create a sprite from the board texture
-    sf::Sprite boardSprite(boardTexture.getTexture());
-    
-    // Setup chess pieces using FEN notation
-    std::map<std::pair<int, int>, ChessPiece> pieces;
-    setupPositionFromFEN(pieces, INITIAL_POSITION_FEN);
-    
-    // Main loop
-    while (window.isOpen()) {
-        // Process events
-        sf::Event event;
-        while (window.pollEvent(event)) {
-            if (event.type == sf::Event::Closed)
-                window.close();
-            else if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape)
-                window.close();
-        }
+    boardSprite.setTexture(boardTexture.getTexture());
+}
 
-        // Only redraw when needed (no animations or changes in this version)
-        window.clear(BACKGROUND);
-        window.draw(boardSprite);
-        drawPieces(window, pieces);
-        window.display();
+void ChessBoard::setPosition(const std::string& fen) {
+    currentFEN = fen;
+    setupPositionFromFEN(pieces, fen);
+}
+
+void ChessBoard::handleEvents() {
+    sf::Event event;
+    while (window.pollEvent(event)) {
+        if (event.type == sf::Event::Closed)
+            window.close();
+        else if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape)
+            window.close();
+    }
+}
+
+void ChessBoard::render() {
+    window.clear(BACKGROUND);
+    window.draw(boardSprite);
+    
+    // Draw pieces
+    drawPieces(window, pieces);
+    
+    window.display();
+}
+
+void ChessBoard::run() {
+    while (window.isOpen()) {
+        handleEvents();
+        render();
+    }
+}
+
+// Replace createChessGrid with a simple menu-based function
+void createChessGrid() {
+    std::cout << "Chess Board Application Menu\n";
+    std::cout << "===========================\n";
+    std::cout << "1. Open Chess Board\n";
+    std::cout << "0. Exit\n";
+    std::cout << "Enter your choice: ";
+    
+    int choice;
+    std::cin >> choice;
+    
+    switch (choice) {
+        case 1: {
+            std::cout << "Starting Chess Board Application...\n";
+            
+            ChessBoard board;
+            if (board.initialize(PIECE_SCALE_FACTOR)) {
+                board.run();
+            } else {
+                std::cout << "Failed to initialize chess board." << std::endl;
+            }
+            break;
+        }
+        case 0:
+        default:
+            std::cout << "Exiting application.\n";
+            break;
     }
 }
 

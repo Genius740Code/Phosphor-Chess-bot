@@ -9,7 +9,7 @@ LDFLAGS = -Lsrc/lib -lsfml-graphics -lsfml-window -lsfml-system -lopengl32 -lsfm
 SRCDIR = code
 SRCS = $(wildcard $(SRCDIR)/*.cpp)
 OBJS = $(notdir $(SRCS:.cpp=.o))
-EXECUTABLE = chess_board
+EXECUTABLE = main
 
 .PHONY: all compile link clean debug release git-checkpoint
 
