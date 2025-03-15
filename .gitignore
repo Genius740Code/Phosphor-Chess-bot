@@ -1,0 +1,24 @@
+# Compiled object files
+*.o
+*.obj
+
+# Executables
+*.exe
+chess_board
+
+# SFML library files (if included)
+*.dll
+
+# Visual Studio Code settings
+.vscode/
+
+# Windows specific
+Thumbs.db
+desktop.ini
+
+# macOS specific
+.DS_Store
+
+# Temporary files
+*.tmp
+*~ 

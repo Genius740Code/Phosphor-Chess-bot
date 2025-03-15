@@ -1,0 +1,50 @@
+# mingw32-make -f MakeFile 
+
+# Compiler and flags
+CXX = g++
+CXXFLAGS = -Wall -Wextra -O2 -std=c++17 -Isrc/include
+LDFLAGS = -Lsrc/lib -lsfml-graphics -lsfml-window -lsfml-system -lopengl32 -lsfml-audio
+
+# Source files and objects
+SRCDIR = code
+SRCS = $(wildcard $(SRCDIR)/*.cpp)
+OBJS = $(notdir $(SRCS:.cpp=.o))
+EXECUTABLE = chess_board
+
+.PHONY: all compile link clean debug release git-checkpoint
+
+all: compile link
+
+# Debug build with debugging symbols
+debug: CXXFLAGS += -g -DDEBUG
+debug: clean all
+
+# Release build with full optimization
+release: CXXFLAGS += -O3 -march=native -DNDEBUG
+release: clean all
+
+compile:
+	@echo "Compiling source files..."
+	$(CXX) $(CXXFLAGS) -c $(SRCS)
+
+link:
+	@echo "Linking executable..."
+	$(CXX) $(OBJS) -o $(EXECUTABLE) $(LDFLAGS)
+	@echo "Build complete: $(EXECUTABLE)"
+
+clean:
+	@echo "Cleaning up..."
+	rm -f *.o $(EXECUTABLE).exe $(EXECUTABLE)
+	@echo "Clean complete"
+
+run: all
+	@echo "Running application..."
+	./$(EXECUTABLE)
+
+# Git checkpoint target
+git-checkpoint:
+	@echo "Saving workspace..."
+	git init -q || true
+	git add .
+	git commit -m "Workspace saved"
+	@echo "Workspace saved successfully!"
