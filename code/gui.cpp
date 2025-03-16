@@ -1,7 +1,8 @@
-#include <SFML/Graphics.hpp> // Include SFML graphics header
+#include <SFML/Graphics.hpp> 
 #include <iostream>
 #include "gui.h"
-#include "pieces_placement.h" // Include the pieces placement header
+#include "pieces_placement.h"
+#include "pieces_movment.h"
 
 // Constants for chess board configuration
 const unsigned int BOARD_SIZE = 8;
@@ -10,14 +11,15 @@ const unsigned int WINDOW_SIZE = BOARD_SIZE * SQUARE_SIZE;
 const sf::Color LIGHT_SQUARE(222, 184, 135); // Light wood color
 const sf::Color DARK_SQUARE(139, 69, 19);    // Dark wood color
 const sf::Color BACKGROUND(50, 50, 50);      // Window background color
-const float PIECE_SCALE_FACTOR = 1.1f;       // Make pieces 10% bigger
+const float PIECE_SCALE_FACTOR = 1.1f;       
 
-// Standard starting position in FEN notation
-const std::string INITIAL_POSITION_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+// Define the static string constant
+const std::string ChessBoard::INITIAL_POSITION_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
 // Implementation of the ChessBoard class
 ChessBoard::ChessBoard() : 
     currentFEN(INITIAL_POSITION_FEN),
+    deltaTime(0.0f),
     window(sf::VideoMode(WINDOW_SIZE, WINDOW_SIZE), 
            "Chess Board", 
            sf::Style::Titlebar | sf::Style::Close)
@@ -34,6 +36,9 @@ bool ChessBoard::initialize(float pieceScaleFactor) {
     // Create board texture
     createBoardTexture();
     
+    // Setup coordinate labels
+    setupCoordinates();
+    
     // Load chess piece textures
     if (!loadPieceTextures(pieceScaleFactor)) {
         std::cerr << "Warning: Some chess pieces could not be loaded.\n"
@@ -44,6 +49,12 @@ bool ChessBoard::initialize(float pieceScaleFactor) {
     
     // Setup initial position
     setPosition(currentFEN);
+    
+    // Initialize interaction handler
+    interaction = std::make_unique<ChessInteraction>(pieces, SQUARE_SIZE);
+    
+    // Start the clock
+    clock.restart();
     
     return true;
 }
@@ -65,6 +76,46 @@ void ChessBoard::createBoardTexture() {
     boardSprite.setTexture(boardTexture.getTexture());
 }
 
+void ChessBoard::setupCoordinates() {
+    coordinateTexts.clear();
+    
+    // Files (A-H) along the bottom
+    for (int i = 0; i < 8; i++) {
+        sf::Text fileText;
+        fileText.setFont(font);
+        fileText.setString(std::string(1, 'a' + i));
+        fileText.setCharacterSize(COORDINATE_SIZE);
+        
+        // Position the text at the bottom of each square
+        float posX = i * SQUARE_SIZE + SQUARE_SIZE - COORDINATE_MARGIN - fileText.getLocalBounds().width;
+        float posY = WINDOW_SIZE - COORDINATE_MARGIN - COORDINATE_SIZE;
+        fileText.setPosition(posX, posY);
+        
+        // Set color based on square color
+        fileText.setFillColor((i + 7) % 2 == 0 ? COORDINATE_DARK : COORDINATE_LIGHT);
+        
+        coordinateTexts.push_back(fileText);
+    }
+    
+    // Ranks (1-8) along the left side (in reverse order to match chess notation)
+    for (int i = 0; i < 8; i++) {
+        sf::Text rankText;
+        rankText.setFont(font);
+        rankText.setString(std::to_string(8 - i));
+        rankText.setCharacterSize(COORDINATE_SIZE);
+        
+        // Position the text at the left of each square
+        float posX = COORDINATE_MARGIN;
+        float posY = i * SQUARE_SIZE + COORDINATE_MARGIN;
+        rankText.setPosition(posX, posY);
+        
+        // Set color based on square color
+        rankText.setFillColor((i) % 2 == 0 ? COORDINATE_DARK : COORDINATE_LIGHT);
+        
+        coordinateTexts.push_back(rankText);
+    }
+}
+
 void ChessBoard::setPosition(const std::string& fen) {
     currentFEN = fen;
     setupPositionFromFEN(pieces, fen);
@@ -77,12 +128,33 @@ void ChessBoard::handleEvents() {
             window.close();
         else if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape)
             window.close();
+        else if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+            interaction->handleMouseClick(event.mouseButton.x, event.mouseButton.y);
+        }
     }
+}
+
+void ChessBoard::update() {
+    // Update delta time
+    deltaTime = clock.restart().asSeconds();
+    
+    // Update interactions (animations, etc.)
+    interaction->update(deltaTime);
 }
 
 void ChessBoard::render() {
     window.clear(BACKGROUND);
+    
+    // Draw the board
     window.draw(boardSprite);
+    
+    // Draw coordinate labels
+    for (const auto& text : coordinateTexts) {
+        window.draw(text);
+    }
+    
+    // Draw interaction effects (highlights)
+    interaction->draw(window);
     
     // Draw pieces
     drawPieces(window, pieces);
@@ -93,11 +165,11 @@ void ChessBoard::render() {
 void ChessBoard::run() {
     while (window.isOpen()) {
         handleEvents();
+        update();
         render();
     }
 }
 
-// Replace createChessGrid with a simple menu-based function
 void createChessGrid() {
     std::cout << "Chess Board Application Menu\n";
     std::cout << "===========================\n";
@@ -113,7 +185,7 @@ void createChessGrid() {
             std::cout << "Starting Chess Board Application...\n";
             
             ChessBoard board;
-            if (board.initialize(PIECE_SCALE_FACTOR)) {
+            if (board.initialize()) {
                 board.run();
             } else {
                 std::cout << "Failed to initialize chess board." << std::endl;
@@ -126,4 +198,3 @@ void createChessGrid() {
             break;
     }
 }
-
