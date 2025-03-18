@@ -16,10 +16,7 @@ PieceTextureManager& PieceTextureManager::getInstance() {
 // Get a texture from the manager
 const sf::Texture* PieceTextureManager::getTexture(const std::string& key) const {
     auto it = textures.find(key);
-    if (it != textures.end()) {
-        return &(it->second);
-    }
-    return nullptr;
+    return it != textures.end() ? &(it->second) : nullptr;
 }
 
 // Load all piece textures
@@ -39,8 +36,8 @@ bool PieceTextureManager::loadTextures(float scaleFactor) {
         return false;
     }
     
-    // Piece filenames 
-    const std::vector<std::string> pieceNames = {
+    // Piece filenames array for faster iteration
+    static const std::string pieceNames[] = {
         "white-pawn", "white-rook", "white-knight", "white-bishop", "white-queen", "white-king",
         "black-pawn", "black-rook", "black-knight", "black-bishop", "black-queen", "black-king"
     };
@@ -52,8 +49,7 @@ bool PieceTextureManager::loadTextures(float scaleFactor) {
         std::string filename = "./pieces/" + piece + ".png";
         
         // Verify file exists
-        std::filesystem::path filePath(filename);
-        if (!std::filesystem::exists(filePath)) {
+        if (!std::filesystem::exists(filename)) {
             std::cerr << "Texture file not found: " << filename << std::endl;
             allLoaded = false;
             continue;
@@ -73,7 +69,7 @@ bool PieceTextureManager::loadTextures(float scaleFactor) {
     return allLoaded;
 }
 
-// Mapping of FEN characters to piece types
+// Fast lookup mapping of FEN characters to piece types
 const std::map<char, PieceType> FEN_TO_PIECE_TYPE = {
     {'p', PieceType::PAWN},   {'P', PieceType::PAWN},
     {'r', PieceType::ROOK},   {'R', PieceType::ROOK},
@@ -88,24 +84,24 @@ bool loadPieceTextures(float scaleFactor) {
     return PieceTextureManager::getInstance().loadTextures(scaleFactor);
 }
 
-// Get piece color from FEN character
+// Get piece color from FEN character - inline for performance
 PieceColor getColorFromFEN(char fenChar) {
     return std::isupper(fenChar) ? PieceColor::WHITE : PieceColor::BLACK;
 }
 
-// Get piece texture key from FEN character
+// Get piece texture key from FEN character - optimized using static map
 std::string getTextureKeyFromFEN(char fenChar) {
-    std::string color = std::isupper(fenChar) ? "white" : "black";
-    
-    // Map of piece characters to piece names
-    const std::map<char, std::string> pieceMap = {
+    static const std::map<char, std::string> pieceMap = {
         {'p', "pawn"}, {'r', "rook"}, {'n', "knight"}, 
         {'b', "bishop"}, {'q', "queen"}, {'k', "king"}
     };
     
+    std::string color = std::isupper(fenChar) ? "white" : "black";
     char lowerChar = std::tolower(fenChar);
-    if (pieceMap.find(lowerChar) != pieceMap.end()) {
-        return color + "-" + pieceMap.at(lowerChar);
+    
+    auto it = pieceMap.find(lowerChar);
+    if (it != pieceMap.end()) {
+        return color + "-" + it->second;
     }
     
     return ""; // Invalid character
@@ -114,7 +110,7 @@ std::string getTextureKeyFromFEN(char fenChar) {
 // Function to set up pieces according to FEN notation
 void setupPositionFromFEN(std::map<std::pair<int, int>, ChessPiece>& pieces, const std::string& fen) {
     pieces.clear();
-    const float SQUARE_SIZE = 100.0f;
+    constexpr float SQUARE_SIZE = 100.0f;
     auto& textureManager = PieceTextureManager::getInstance();
     
     // Parse board position (first part of FEN)
@@ -143,17 +139,16 @@ void setupPositionFromFEN(std::map<std::pair<int, int>, ChessPiece>& pieces, con
                     sf::Sprite(*texture)
                 };
                 
-                // Calculate center positions to place pieces
+                // Direct calculation of scaling and positioning for performance
                 float textureWidth = texture->getSize().x;
                 float textureHeight = texture->getSize().y;
-                
-                // Apply the scaling factor
                 float scaleFactor = textureManager.getScale();
                 float scaleX = (SQUARE_SIZE / textureWidth) * scaleFactor;
                 float scaleY = (SQUARE_SIZE / textureHeight) * scaleFactor;
+                
                 piece.sprite.setScale(scaleX, scaleY);
                 
-                // Center the piece in its square
+                // Position the piece with center alignment
                 float offsetX = (SQUARE_SIZE - (textureWidth * scaleX)) / 2;
                 float offsetY = (SQUARE_SIZE - (textureHeight * scaleY)) / 2;
                 
@@ -162,7 +157,7 @@ void setupPositionFromFEN(std::map<std::pair<int, int>, ChessPiece>& pieces, con
                     row * SQUARE_SIZE + offsetY
                 );
                 
-                pieces[{col, row}] = piece;
+                pieces[{col, row}] = std::move(piece);
             }
             
             col++;

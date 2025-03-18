@@ -8,12 +8,12 @@ LDFLAGS = -Lsrc/lib -lsfml-graphics -lsfml-window -lsfml-system -lopengl32 -lsfm
 # Source files and objects
 SRCDIR = code
 SRCS = $(wildcard $(SRCDIR)/*.cpp)
-OBJS = $(notdir $(SRCS:.cpp=.o))
+OBJS = $(patsubst $(SRCDIR)/%.cpp,%.o,$(SRCS))
 EXECUTABLE = main
 
-.PHONY: all compile link clean debug release git-checkpoint
+.PHONY: all clean debug release run
 
-all: compile link
+all: $(EXECUTABLE)
 
 # Debug build with debugging symbols
 debug: CXXFLAGS += -g -DDEBUG
@@ -23,22 +23,17 @@ debug: clean all
 release: CXXFLAGS += -O3 -march=native -DNDEBUG
 release: clean all
 
-compile:
-	@echo "Compiling source files..."
-	$(CXX) $(CXXFLAGS) -c $(SRCS)
+%.o: $(SRCDIR)/%.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-link:
-	@echo "Linking executable..."
-	$(CXX) $(OBJS) -o $(EXECUTABLE) $(LDFLAGS)
-	@echo "Build complete: $(EXECUTABLE)"
+$(EXECUTABLE): $(OBJS)
+	$(CXX) $^ -o $@ $(LDFLAGS)
+	@echo "Build complete: $@"
 
 clean:
-	@echo "Cleaning up..."
 	rm -f *.o $(EXECUTABLE).exe $(EXECUTABLE)
-	@echo "Clean complete"
 
 run: all
-	@echo "Running application..."
 	./$(EXECUTABLE)
 
 # Git checkpoint target

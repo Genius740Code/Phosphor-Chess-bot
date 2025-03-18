@@ -5,7 +5,6 @@
 #include <map>
 #include <vector>
 #include <utility>
-#include <memory>
 #include "pieces_placement.h"
 
 /**
@@ -44,9 +43,9 @@ private:
     // Animation values
     float selectionAlpha = 180.0f;
     float selectionPulseDir = -1.0f;
-    const float PULSE_SPEED = 120.0f;
-    const float MIN_ALPHA = 120.0f;
-    const float MAX_ALPHA = 200.0f;
+    static constexpr float PULSE_SPEED = 120.0f;
+    static constexpr float MIN_ALPHA = 120.0f;
+    static constexpr float MAX_ALPHA = 200.0f;
     
     // Colors
     const sf::Color baseSelectionColor{173, 216, 230}; // Light blue

@@ -5,33 +5,25 @@
 #include <map>
 #include <string>
 #include <vector>
-#include <memory>
 
-// Enumeration for piece types
-enum class PieceType {
-    PAWN, ROOK, KNIGHT, BISHOP, QUEEN, KING
-};
+// Piece type and color enumerations
+enum class PieceType { PAWN, ROOK, KNIGHT, BISHOP, QUEEN, KING };
+enum class PieceColor { WHITE, BLACK };
 
-// Enumeration for piece colors
-enum class PieceColor {
-    WHITE, BLACK
-};
-
-// Struct to define a chess piece
+// Chess piece structure
 struct ChessPiece {
     PieceType type;
     PieceColor color;
     sf::Sprite sprite;
 };
 
-// Class to manage piece textures
+// Singleton texture manager for chess pieces
 class PieceTextureManager {
 private:
     static PieceTextureManager* instance;
     std::map<std::string, sf::Texture> textures;
     float currentScale;
     
-    // Private constructor for singleton
     PieceTextureManager() : currentScale(1.0f) {}
     
 public:
@@ -41,25 +33,16 @@ public:
     float getScale() const { return currentScale; }
 };
 
-// Function to set up piece positions from FEN notation
-// Standard starting position FEN: "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+// Position setup and drawing
 void setupPositionFromFEN(std::map<std::pair<int, int>, ChessPiece>& pieces, 
                           const std::string& fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
-
-// Function to draw pieces on the board
 void drawPieces(sf::RenderWindow& window, const std::map<std::pair<int, int>, ChessPiece>& pieces);
-
-// External texture map to store all piece textures
-extern std::map<std::string, sf::Texture> pieceTextures;
-
-// Get list of piece filenames
-std::vector<std::string> getPieceFilenames();
 
 // Helper functions for FEN notation
 PieceColor getColorFromFEN(char fenChar);
 std::string getTextureKeyFromFEN(char fenChar);
 
-// Backwards compatibility function
+// Backwards compatibility
 bool loadPieceTextures(float scaleFactor = 1.0f);
 
 #endif // PIECES_PLACEMENT_H 
