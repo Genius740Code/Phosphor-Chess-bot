@@ -2,7 +2,10 @@
 #include <iostream>
 
 ChessInteraction::ChessInteraction(std::map<BoardPosition, ChessPiece>& piecesRef, float squareSz)
-    : pieces(piecesRef), squareSize(squareSz)
+    : pieces(piecesRef), squareSize(squareSz),
+      whiteKingMoved(false), blackKingMoved(false),
+      whiteKingsideRookMoved(false), whiteQueensideRookMoved(false),
+      blackKingsideRookMoved(false), blackQueensideRookMoved(false)
 {
     // Initialize promotion panel
     const float panelWidth = squareSize * 1.5f;
@@ -10,62 +13,57 @@ ChessInteraction::ChessInteraction(std::map<BoardPosition, ChessPiece>& piecesRe
     const float panelHeight = 4 * squareSize + headerHeight;
     const float borderThickness = 3.0f;
     
-    // Main panel
+    // Preallocate UI elements with optimized initialization
     promotionPanel.setSize(sf::Vector2f(panelWidth, panelHeight));
     promotionPanel.setFillColor(promotionPanelColor);
     
-    // Header
     promotionHeader.setSize(sf::Vector2f(panelWidth, headerHeight));
     promotionHeader.setFillColor(promotionHeaderColor);
     
-    // Border
     promotionBorder.setSize(sf::Vector2f(panelWidth + 2*borderThickness, panelHeight + 2*borderThickness));
     promotionBorder.setFillColor(promotionBorderColor);
     
-    // Create highlight boxes for selection feedback
+    // Preallocate promotion highlights
+    promotionSelectionHighlights.reserve(4);
     for (int i = 0; i < 4; i++) {
         sf::RectangleShape highlight;
         highlight.setSize(sf::Vector2f(panelWidth - 10, squareSize - 10));
         highlight.setFillColor(sf::Color(173, 216, 230, 120));
         highlight.setOutlineThickness(2);
         highlight.setOutlineColor(sf::Color(100, 149, 237));
-        promotionSelectionHighlights.push_back(highlight);
+        promotionSelectionHighlights.push_back(std::move(highlight));
     }
 }
 
 bool ChessInteraction::handleMouseClick(int x, int y) {
-    // Keep track of old selection to determine if state changed
+    // Cache the old selection for comparison
     auto oldSelection = selectedSquare;
     
-    // Check if we're handling a promotion selection
+    // Handle promotion selection
     if (awaitingPromotion) {
         // Get promotion panel bounds
-        float panelX = promotionPanel.getPosition().x;
-        float panelY = promotionPanel.getPosition().y;
-        float panelWidth = promotionPanel.getSize().x;
-        float panelHeight = promotionPanel.getSize().y;
-        float headerHeight = promotionHeader.getSize().y;
+        const float panelX = promotionPanel.getPosition().x;
+        const float panelY = promotionPanel.getPosition().y;
+        const float panelWidth = promotionPanel.getSize().x;
+        const float panelHeight = promotionPanel.getSize().y;
+        const float headerHeight = promotionHeader.getSize().y;
         
         // Check if click is within promotion panel
         if (x >= panelX && x <= panelX + panelWidth &&
             y >= panelY + headerHeight && y <= panelY + panelHeight) {
             
             // Calculate which option was clicked
-            int relativeY = y - (panelY + headerHeight);
-            int optionIndex = relativeY / static_cast<int>(squareSize);
+            const int relativeY = y - (panelY + headerHeight);
+            const int optionIndex = relativeY / static_cast<int>(squareSize);
             
-            // Make sure it's a valid selection
-            if (optionIndex >= 0 && optionIndex < 4) { // Queen, Rook, Bishop, Knight
-                PieceType promotionType;
-                switch (optionIndex) {
-                    case 0: promotionType = PieceType::QUEEN; break;
-                    case 1: promotionType = PieceType::ROOK; break;
-                    case 2: promotionType = PieceType::BISHOP; break;
-                    case 3: promotionType = PieceType::KNIGHT; break;
-                    default: promotionType = PieceType::QUEEN; break;
-                }
+            // Process valid selection
+            if (optionIndex >= 0 && optionIndex < 4) {
+                static const PieceType promotionTypes[4] = {
+                    PieceType::QUEEN, PieceType::ROOK, 
+                    PieceType::BISHOP, PieceType::KNIGHT
+                };
                 
-                executePromotion(promotionType);
+                executePromotion(promotionTypes[optionIndex]);
                 awaitingPromotion = false;
                 return true;
             }
@@ -77,17 +75,16 @@ bool ChessInteraction::handleMouseClick(int x, int y) {
     }
     
     // Convert mouse position to board coordinates
-    int file = x / static_cast<int>(squareSize);
-    int rank = y / static_cast<int>(squareSize);
+    const int file = x / static_cast<int>(squareSize);
+    const int rank = y / static_cast<int>(squareSize);
     
     // Ensure we're within board boundaries
     if (file >= 0 && file < 8 && rank >= 0 && rank < 8) {
-        BoardPosition clickedSquare = {file, rank};
+        const BoardPosition clickedSquare = {file, rank};
         
         // Check if we clicked on a legal move square
         if (selectedSquare.first != -1) {
-            auto it = std::find(legalMoves.begin(), legalMoves.end(), clickedSquare);
-            if (it != legalMoves.end()) {
+            if (std::find(legalMoves.begin(), legalMoves.end(), clickedSquare) != legalMoves.end()) {
                 // Execute the move with all special case handling
                 movePiece(selectedSquare, clickedSquare);
                 
@@ -132,6 +129,70 @@ void ChessInteraction::movePiece(const BoardPosition& from, const BoardPosition&
     
     ChessPiece movingPiece = pieceIt->second;
     
+    // Update castling flags
+    if (movingPiece.type == PieceType::KING) {
+        if (movingPiece.color == PieceColor::WHITE) {
+            whiteKingMoved = true;
+        } else {
+            blackKingMoved = true;
+        }
+    } else if (movingPiece.type == PieceType::ROOK) {
+        const int y = from.second;
+        const int x = from.first;
+        
+        // Optimized rook tracking using a single if with compound conditions
+        if (movingPiece.color == PieceColor::WHITE && y == 7) {
+            if (x == 0) whiteQueensideRookMoved = true;
+            else if (x == 7) whiteKingsideRookMoved = true;
+        } else if (movingPiece.color == PieceColor::BLACK && y == 0) {
+            if (x == 0) blackQueensideRookMoved = true;
+            else if (x == 7) blackKingsideRookMoved = true;
+        }
+    }
+    
+    // Handle castling with optimized code
+    if (isCastlingMove(from, to)) {
+        const int y = from.second;
+        BoardPosition rookFrom, rookTo;
+        
+        if (to.first > from.first) { // Kingside castling
+            rookFrom = {7, y};
+            rookTo = {to.first - 1, y}; // f1 for white, f8 for black
+        } else { // Queenside castling
+            rookFrom = {0, y};
+            rookTo = {to.first + 1, y}; // d1 for white, d8 for black
+        }
+        
+        // Move the rook
+        auto rookIt = pieces.find(rookFrom);
+        if (rookIt != pieces.end()) {
+            // Create a copy of the rook for moving
+            ChessPiece rook = rookIt->second;
+            
+            // Position the rook sprite properly
+            const sf::Texture* texture = rook.sprite.getTexture();
+            if (texture) {
+                const float textureWidth = texture->getSize().x;
+                const float textureHeight = texture->getSize().y;
+                const float scaleX = rook.sprite.getScale().x;
+                const float scaleY = rook.sprite.getScale().y;
+                
+                // Center the rook in its new square
+                const float offsetX = (squareSize - (textureWidth * scaleX)) / 2;
+                const float offsetY = (squareSize - (textureHeight * scaleY)) / 2;
+                
+                rook.sprite.setPosition(
+                    rookTo.first * squareSize + offsetX,
+                    rookTo.second * squareSize + offsetY
+                );
+            }
+            
+            // Remove rook from old position and place at new position
+            pieces.erase(rookFrom);
+            pieces[rookTo] = std::move(rook);
+        }
+    }
+    
     // Check for promotion
     if (isPromotionMove(from, to)) {
         // Save the move info and show promotion options
@@ -140,14 +201,14 @@ void ChessInteraction::movePiece(const BoardPosition& from, const BoardPosition&
         // Center the pawn in the destination square properly
         const sf::Texture* texture = movingPiece.sprite.getTexture();
         if (texture) {
-            float textureWidth = texture->getSize().x;
-            float textureHeight = texture->getSize().y;
-            float scaleX = movingPiece.sprite.getScale().x;
-            float scaleY = movingPiece.sprite.getScale().y;
+            const float textureWidth = texture->getSize().x;
+            const float textureHeight = texture->getSize().y;
+            const float scaleX = movingPiece.sprite.getScale().x;
+            const float scaleY = movingPiece.sprite.getScale().y;
             
             // Calculate position to center the piece in the square
-            float offsetX = (squareSize - (textureWidth * scaleX)) / 2;
-            float offsetY = (squareSize - (textureHeight * scaleY)) / 2;
+            const float offsetX = (squareSize - (textureWidth * scaleX)) / 2;
+            const float offsetY = (squareSize - (textureHeight * scaleY)) / 2;
             
             movingPiece.sprite.setPosition(
                 to.first * squareSize + offsetX,
@@ -163,7 +224,7 @@ void ChessInteraction::movePiece(const BoardPosition& from, const BoardPosition&
         
         // Move pawn to destination temporarily
         pieces.erase(from);
-        pieces[to] = movingPiece;
+        pieces[to] = std::move(movingPiece);
         
         // Set flag to await promotion choice
         awaitingPromotion = true;
@@ -175,11 +236,9 @@ void ChessInteraction::movePiece(const BoardPosition& from, const BoardPosition&
     
     // Check for en passant capture
     if (isEnPassantMove(from, to)) {
-        // Remove the captured pawn (which is not at the destination square)
+        // Remove the captured pawn
         BoardPosition capturedPawnPos = {to.first, from.second};
         pieces.erase(capturedPawnPos);
-        std::cout << "En passant capture at (" << capturedPawnPos.first << "," 
-                  << capturedPawnPos.second << ")" << std::endl;
     }
     
     // Capture any piece at destination
@@ -188,14 +247,14 @@ void ChessInteraction::movePiece(const BoardPosition& from, const BoardPosition&
     // Center the piece properly in its destination square
     const sf::Texture* texture = movingPiece.sprite.getTexture();
     if (texture) {
-        float textureWidth = texture->getSize().x;
-        float textureHeight = texture->getSize().y;
-        float scaleX = movingPiece.sprite.getScale().x;
-        float scaleY = movingPiece.sprite.getScale().y;
+        const float textureWidth = texture->getSize().x;
+        const float textureHeight = texture->getSize().y;
+        const float scaleX = movingPiece.sprite.getScale().x;
+        const float scaleY = movingPiece.sprite.getScale().y;
         
         // Calculate position to center the piece in the square
-        float offsetX = (squareSize - (textureWidth * scaleX)) / 2;
-        float offsetY = (squareSize - (textureHeight * scaleY)) / 2;
+        const float offsetX = (squareSize - (textureWidth * scaleX)) / 2;
+        const float offsetY = (squareSize - (textureHeight * scaleY)) / 2;
         
         movingPiece.sprite.setPosition(
             to.first * squareSize + offsetX,
@@ -208,22 +267,16 @@ void ChessInteraction::movePiece(const BoardPosition& from, const BoardPosition&
     
     // Move the piece in the data structure
     pieces.erase(from);
-    pieces[to] = movingPiece;
+    pieces[to] = std::move(movingPiece);
     
-    // Check if this is a two-square pawn move (for en passant next move)
+    // Update en passant target
     if (movingPiece.type == PieceType::PAWN && std::abs(to.second - from.second) == 2) {
         // Set en passant target square
-        enPassantTarget = {to.first, (from.second + to.second) / 2}; // Middle square
-        std::cout << "En passant target set at (" << enPassantTarget.first << "," 
-                  << enPassantTarget.second << ")" << std::endl;
+        enPassantTarget = {to.first, (from.second + to.second) / 2};
     } else {
         // Clear en passant target
         enPassantTarget = {-1, -1};
     }
-    
-    std::cout << "Piece moved from (" << from.first << "," 
-              << from.second << ") to (" 
-              << to.first << "," << to.second << ")" << std::endl;
 }
 
 bool ChessInteraction::isPromotionMove(const BoardPosition& from, const BoardPosition& to) const {
@@ -232,16 +285,12 @@ bool ChessInteraction::isPromotionMove(const BoardPosition& from, const BoardPos
     
     const ChessPiece& piece = pieceIt->second;
     
-    // Check if it's a pawn
+    // Quick check first for performance
     if (piece.type != PieceType::PAWN) return false;
     
     // Check if it's reaching the opposite end
-    if ((piece.color == PieceColor::WHITE && to.second == 0) ||
-        (piece.color == PieceColor::BLACK && to.second == 7)) {
-        return true;
-    }
-    
-    return false;
+    return (piece.color == PieceColor::WHITE && to.second == 0) ||
+           (piece.color == PieceColor::BLACK && to.second == 7);
 }
 
 bool ChessInteraction::isEnPassantMove(const BoardPosition& from, const BoardPosition& to) const {
@@ -253,25 +302,20 @@ bool ChessInteraction::isEnPassantMove(const BoardPosition& from, const BoardPos
     
     const ChessPiece& piece = pieceIt->second;
     
-    // Check if it's a pawn
+    // Quick check first for performance
     if (piece.type != PieceType::PAWN) return false;
     
-    // Check if destination is the en passant target
-    if (to == enPassantTarget) {
-        // Check if it's a diagonal move (capture)
-        if (std::abs(to.first - from.first) == 1 && std::abs(to.second - from.second) == 1) {
-            return true;
-        }
-    }
-    
-    return false;
+    // Check if destination is the en passant target and it's a diagonal move
+    return to == enPassantTarget && 
+           std::abs(to.first - from.first) == 1 && 
+           std::abs(to.second - from.second) == 1;
 }
 
 void ChessInteraction::showPromotionOptions(const BoardPosition& square, PieceColor color) {
     promotionOptions.clear();
     
     // Define the pieces to choose from (in order: Queen, Rook, Bishop, Knight)
-    PieceType promotionTypes[] = {
+    static const PieceType promotionTypes[] = {
         PieceType::QUEEN, PieceType::ROOK, PieceType::BISHOP, PieceType::KNIGHT
     };
     
@@ -281,13 +325,9 @@ void ChessInteraction::showPromotionOptions(const BoardPosition& square, PieceCo
     const float headerHeight = promotionHeader.getSize().y;
     const float borderThickness = 3.0f;
     
-    // Position the panel to the right of the column when possible, otherwise to the left
-    float panelX;
-    if (square.first < 6) {  // If there's room to the right
-        panelX = (square.first + 1.2f) * squareSize;
-    } else {  // Position to the left
-        panelX = (square.first - 1.7f) * squareSize;
-    }
+    // Position the panel intelligently based on available space
+    float panelX = (square.first < 6) ? (square.first + 1.2f) * squareSize : 
+                                       (square.first - 1.7f) * squareSize;
     
     // Position vertically to be centered
     float panelY = std::max(0.0f, std::min(
@@ -295,59 +335,53 @@ void ChessInteraction::showPromotionOptions(const BoardPosition& square, PieceCo
         square.second * squareSize - (panelHeight / 2) + (squareSize / 2)  // Center on square
     ));
     
-    // Set border position (slightly offset to create border effect)
+    // Set positions
     promotionBorder.setPosition(panelX - borderThickness, panelY - borderThickness);
-    
-    // Set panel position
     promotionPanel.setPosition(panelX, panelY);
-    
-    // Set header position
     promotionHeader.setPosition(panelX, panelY);
     
     // Get texture manager reference
     auto& textureManager = PieceTextureManager::getInstance();
     
+    // String buffers for pieces (avoids recreation in loop)
+    std::string colorName = (color == PieceColor::WHITE) ? "white" : "black";
+    std::string textureKey;
+    
     // Create sprite for each promotion option
     for (int i = 0; i < 4; i++) {
         // Construct the texture key
-        std::string colorName = (color == PieceColor::WHITE) ? "white" : "black";
-        std::string typeName;
         switch (promotionTypes[i]) {
-            case PieceType::QUEEN: typeName = "queen"; break;
-            case PieceType::ROOK: typeName = "rook"; break;
-            case PieceType::BISHOP: typeName = "bishop"; break;
-            case PieceType::KNIGHT: typeName = "knight"; break;
+            case PieceType::QUEEN: textureKey = colorName + "-queen"; break;
+            case PieceType::ROOK: textureKey = colorName + "-rook"; break;
+            case PieceType::BISHOP: textureKey = colorName + "-bishop"; break;
+            case PieceType::KNIGHT: textureKey = colorName + "-knight"; break;
             default: continue;
         }
         
-        std::string textureKey = colorName + "-" + typeName;
         const sf::Texture* texture = textureManager.getTexture(textureKey);
         
         if (texture) {
             ChessPiece option{promotionTypes[i], color, sf::Sprite(*texture)};
             
             // Scale the sprite
-            float textureWidth = texture->getSize().x;
-            float textureHeight = texture->getSize().y;
-            float scaleFactor = textureManager.getScale() * 0.9f; // Slightly smaller
-            float scaleX = (squareSize / textureWidth) * scaleFactor;
-            float scaleY = (squareSize / textureHeight) * scaleFactor;
+            const float textureWidth = texture->getSize().x;
+            const float textureHeight = texture->getSize().y;
+            const float scaleFactor = textureManager.getScale() * 0.9f; // Slightly smaller
+            const float scaleX = (squareSize / textureWidth) * scaleFactor;
+            const float scaleY = (squareSize / textureHeight) * scaleFactor;
             option.sprite.setScale(scaleX, scaleY);
             
             // Center the piece in its panel slot
-            float offsetX = (panelWidth - (textureWidth * scaleX)) / 2;
-            float offsetY = (squareSize - (textureHeight * scaleY)) / 2;
+            const float offsetX = (panelWidth - (textureWidth * scaleX)) / 2;
+            const float offsetY = (squareSize - (textureHeight * scaleY)) / 2;
             
-            float optionY = panelY + headerHeight + (i * squareSize);
+            const float optionY = panelY + headerHeight + (i * squareSize);
             option.sprite.setPosition(panelX + offsetX, optionY + offsetY);
             
             // Position the selection highlight
-            promotionSelectionHighlights[i].setPosition(
-                panelX + 5, 
-                optionY + 5
-            );
+            promotionSelectionHighlights[i].setPosition(panelX + 5, optionY + 5);
             
-            promotionOptions.push_back(option);
+            promotionOptions.push_back(std::move(option));
         }
     }
 }
@@ -359,6 +393,7 @@ void ChessInteraction::executePromotion(PieceType promotionType) {
     // Create the new promoted piece
     std::string colorName = (promotionColor == PieceColor::WHITE) ? "white" : "black";
     std::string typeName;
+    
     switch (promotionType) {
         case PieceType::QUEEN: typeName = "queen"; break;
         case PieceType::ROOK: typeName = "rook"; break;
@@ -370,10 +405,7 @@ void ChessInteraction::executePromotion(PieceType promotionType) {
     std::string textureKey = colorName + "-" + typeName;
     const sf::Texture* texture = PieceTextureManager::getInstance().getTexture(textureKey);
     
-    if (!texture) {
-        std::cerr << "Error: Could not find texture for " << textureKey << std::endl;
-        return;
-    }
+    if (!texture) return;
     
     // Create the promoted piece
     ChessPiece promotedPiece{
@@ -383,16 +415,16 @@ void ChessInteraction::executePromotion(PieceType promotionType) {
     };
     
     // Set appropriate scale and position
-    float textureWidth = texture->getSize().x;
-    float textureHeight = texture->getSize().y;
-    float scaleFactor = PieceTextureManager::getInstance().getScale();
-    float scaleX = (squareSize / textureWidth) * scaleFactor;
-    float scaleY = (squareSize / textureHeight) * scaleFactor;
+    const float textureWidth = texture->getSize().x;
+    const float textureHeight = texture->getSize().y;
+    const float scaleFactor = PieceTextureManager::getInstance().getScale();
+    const float scaleX = (squareSize / textureWidth) * scaleFactor;
+    const float scaleY = (squareSize / textureHeight) * scaleFactor;
     promotedPiece.sprite.setScale(scaleX, scaleY);
     
     // Center the piece in its square
-    float offsetX = (squareSize - (textureWidth * scaleX)) / 2;
-    float offsetY = (squareSize - (textureHeight * scaleY)) / 2;
+    const float offsetX = (squareSize - (textureWidth * scaleX)) / 2;
+    const float offsetY = (squareSize - (textureHeight * scaleY)) / 2;
     
     promotedPiece.sprite.setPosition(
         promotionSquare.first * squareSize + offsetX,
@@ -400,15 +432,13 @@ void ChessInteraction::executePromotion(PieceType promotionType) {
     );
     
     // Replace the pawn with the promoted piece
-    pieces[promotionSquare] = promotedPiece;
-    
-    std::cout << "Promoted pawn to " << typeName << " at (" 
-              << promotionSquare.first << "," << promotionSquare.second << ")" << std::endl;
+    pieces[promotionSquare] = std::move(promotedPiece);
 }
 
 void ChessInteraction::calculateLegalMoves() {
-    // Clear previous legal moves
+    // Clear and preallocate for performance
     legalMoves.clear();
+    legalMoves.reserve(32); // Reasonable estimate for max legal moves
     
     // If no piece is selected, do nothing
     if (selectedSquare.first == -1) return;
@@ -437,18 +467,20 @@ void ChessInteraction::calculateLegalMoves() {
             legalMoves = getQueenMoves(selectedSquare, piece);
             break;
         case PieceType::KING:
-            // King moves will be implemented later
+            legalMoves = getKingMoves(selectedSquare, piece);
             break;
     }
 }
 
 std::vector<BoardPosition> ChessInteraction::getPawnMoves(const BoardPosition& pos, const ChessPiece& piece) {
     std::vector<BoardPosition> moves;
-    int x = pos.first;
-    int y = pos.second;
+    moves.reserve(4); // Maximum possible pawn moves
+    
+    const int x = pos.first;
+    const int y = pos.second;
     
     // Determine direction (white pawns move up the board, black pawns down)
-    int direction = (piece.color == PieceColor::WHITE) ? -1 : 1;
+    const int direction = (piece.color == PieceColor::WHITE) ? -1 : 1;
     
     // Forward move (can't capture)
     BoardPosition forwardPos{x, y + direction};
@@ -458,8 +490,8 @@ std::vector<BoardPosition> ChessInteraction::getPawnMoves(const BoardPosition& p
             moves.push_back(forwardPos);
             
             // If pawn is in starting position, it can move two squares forward
-            bool inStartingPos = (piece.color == PieceColor::WHITE && y == 6) || 
-                                (piece.color == PieceColor::BLACK && y == 1);
+            const bool inStartingPos = (piece.color == PieceColor::WHITE && y == 6) || 
+                                      (piece.color == PieceColor::BLACK && y == 1);
                                 
             if (inStartingPos) {
                 BoardPosition doubleForwardPos{x, y + 2 * direction};
@@ -471,8 +503,9 @@ std::vector<BoardPosition> ChessInteraction::getPawnMoves(const BoardPosition& p
         }
     }
     
-    // Diagonal captures
-    for (int dx : {-1, 1}) {
+    // Diagonal captures - optimized using array instead of initializer list
+    static const int dxValues[2] = {-1, 1};
+    for (int dx : dxValues) {
         BoardPosition capturePos{x + dx, y + direction};
         // Make sure position is on the board
         if (capturePos.first >= 0 && capturePos.first < 8 && 
@@ -496,31 +529,37 @@ std::vector<BoardPosition> ChessInteraction::getPawnMoves(const BoardPosition& p
 
 std::vector<BoardPosition> ChessInteraction::getRookMoves(const BoardPosition& pos, const ChessPiece& piece) {
     std::vector<BoardPosition> moves;
+    moves.reserve(14); // Rooks can move to at most 14 squares
     
-    // Rooks move horizontally and vertically
-    // Check four directions: up, right, down, left
-    addMovesInDirection(moves, pos, 0, -1, piece); // Up
-    addMovesInDirection(moves, pos, 1, 0, piece);  // Right
-    addMovesInDirection(moves, pos, 0, 1, piece);  // Down
-    addMovesInDirection(moves, pos, -1, 0, piece); // Left
+    // Define the four directions as a static array for optimization
+    static const std::pair<int, int> directions[4] = {
+        {0, -1}, {1, 0}, {0, 1}, {-1, 0}
+    };
+    
+    // Check moves in all four directions
+    for (const auto& [dx, dy] : directions) {
+        addMovesInDirection(moves, pos, dx, dy, piece);
+    }
     
     return moves;
 }
 
 std::vector<BoardPosition> ChessInteraction::getKnightMoves(const BoardPosition& pos, const ChessPiece& piece) {
     std::vector<BoardPosition> moves;
-    int x = pos.first;
-    int y = pos.second;
+    moves.reserve(8); // Knights can move to at most 8 squares
+    
+    const int x = pos.first;
+    const int y = pos.second;
     
     // All eight possible knight moves
-    const std::vector<std::pair<int, int>> knightOffsets = {
+    static const std::pair<int, int> knightOffsets[8] = {
         {-2, -1}, {-2, 1}, {-1, -2}, {-1, 2},
         {1, -2}, {1, 2}, {2, -1}, {2, 1}
     };
     
-    for (const auto& offset : knightOffsets) {
-        int newX = x + offset.first;
-        int newY = y + offset.second;
+    for (const auto& [dx, dy] : knightOffsets) {
+        const int newX = x + dx;
+        const int newY = y + dy;
         
         // Check if the new position is on the board
         if (newX >= 0 && newX < 8 && newY >= 0 && newY < 8) {
@@ -539,28 +578,35 @@ std::vector<BoardPosition> ChessInteraction::getKnightMoves(const BoardPosition&
 
 std::vector<BoardPosition> ChessInteraction::getBishopMoves(const BoardPosition& pos, const ChessPiece& piece) {
     std::vector<BoardPosition> moves;
+    moves.reserve(13); // Bishops can move to at most 13 squares
     
-    // Bishops move diagonally
-    // Check four diagonal directions
-    addMovesInDirection(moves, pos, 1, -1, piece);  // Up-right
-    addMovesInDirection(moves, pos, 1, 1, piece);   // Down-right
-    addMovesInDirection(moves, pos, -1, 1, piece);  // Down-left
-    addMovesInDirection(moves, pos, -1, -1, piece); // Up-left
+    // Define the four directions as a static array for optimization
+    static const std::pair<int, int> directions[4] = {
+        {1, -1}, {1, 1}, {-1, 1}, {-1, -1}
+    };
+    
+    // Check moves in all four diagonal directions
+    for (const auto& [dx, dy] : directions) {
+        addMovesInDirection(moves, pos, dx, dy, piece);
+    }
     
     return moves;
 }
 
 std::vector<BoardPosition> ChessInteraction::getQueenMoves(const BoardPosition& pos, const ChessPiece& piece) {
     std::vector<BoardPosition> moves;
+    moves.reserve(27); // Queens can move to at most 27 squares
     
-    // Queens can move like both rooks and bishops
-    // First get all rook moves
-    auto rookMoves = getRookMoves(pos, piece);
-    moves.insert(moves.end(), rookMoves.begin(), rookMoves.end());
+    // Define all eight directions as a static array for optimization
+    static const std::pair<int, int> directions[8] = {
+        {0, -1}, {1, -1}, {1, 0}, {1, 1}, 
+        {0, 1}, {-1, 1}, {-1, 0}, {-1, -1}
+    };
     
-    // Then get all bishop moves
-    auto bishopMoves = getBishopMoves(pos, piece);
-    moves.insert(moves.end(), bishopMoves.begin(), bishopMoves.end());
+    // Check moves in all eight directions
+    for (const auto& [dx, dy] : directions) {
+        addMovesInDirection(moves, pos, dx, dy, piece);
+    }
     
     return moves;
 }
@@ -569,12 +615,12 @@ void ChessInteraction::addMovesInDirection(std::vector<BoardPosition>& moves,
                                           const BoardPosition& startPos, 
                                           int dirX, int dirY, 
                                           const ChessPiece& piece) {
-    int x = startPos.first;
-    int y = startPos.second;
+    const int x = startPos.first;
+    const int y = startPos.second;
     
     for (int i = 1; i < 8; ++i) {
-        int newX = x + i * dirX;
-        int newY = y + i * dirY;
+        const int newX = x + i * dirX;
+        const int newY = y + i * dirY;
         
         // Check if the new position is on the board
         if (newX < 0 || newX >= 8 || newY < 0 || newY >= 8) {
@@ -597,6 +643,109 @@ void ChessInteraction::addMovesInDirection(std::vector<BoardPosition>& moves,
             break;
         }
     }
+}
+
+// New method for king moves
+std::vector<BoardPosition> ChessInteraction::getKingMoves(const BoardPosition& pos, const ChessPiece& piece) {
+    std::vector<BoardPosition> moves;
+    moves.reserve(10); // Kings can move to at most 8 squares + 2 castling moves
+    
+    const int x = pos.first;
+    const int y = pos.second;
+    
+    // Define all eight directions as a static array for optimization
+    static const std::pair<int, int> directions[8] = {
+        {-1, -1}, {0, -1}, {1, -1}, {1, 0}, 
+        {1, 1}, {0, 1}, {-1, 1}, {-1, 0}
+    };
+    
+    // Regular king moves (one square in any direction)
+    for (const auto& [dx, dy] : directions) {
+        const int newX = x + dx;
+        const int newY = y + dy;
+        
+        // Check if the new position is on the board
+        if (newX >= 0 && newX < 8 && newY >= 0 && newY < 8) {
+            BoardPosition newPos{newX, newY};
+            
+            // Check if the square is empty or has an enemy piece
+            auto it = pieces.find(newPos);
+            if (it == pieces.end() || it->second.color != piece.color) {
+                moves.push_back(newPos);
+            }
+        }
+    }
+    
+    // Check for castling possibilities
+    if (piece.color == PieceColor::WHITE) {
+        if (!whiteKingMoved) {
+            // Kingside castling
+            if (!whiteKingsideRookMoved && canCastle(pos, 1, piece)) {
+                moves.push_back({x + 2, y});
+            }
+            
+            // Queenside castling
+            if (!whiteQueensideRookMoved && canCastle(pos, -1, piece)) {
+                moves.push_back({x - 2, y});
+            }
+        }
+    } else {
+        if (!blackKingMoved) {
+            // Kingside castling
+            if (!blackKingsideRookMoved && canCastle(pos, 1, piece)) {
+                moves.push_back({x + 2, y});
+            }
+            
+            // Queenside castling
+            if (!blackQueensideRookMoved && canCastle(pos, -1, piece)) {
+                moves.push_back({x - 2, y});
+            }
+        }
+    }
+    
+    return moves;
+}
+
+bool ChessInteraction::canCastle(const BoardPosition& kingPos, int direction, const ChessPiece& king) {
+    const int x = kingPos.first;
+    const int y = kingPos.second;
+    
+    // Quick check for king position
+    if ((king.color == PieceColor::WHITE && y != 7) ||
+        (king.color == PieceColor::BLACK && y != 0)) {
+        return false;
+    }
+    
+    // Determine rook position
+    const BoardPosition rookPos{direction > 0 ? 7 : 0, y};
+    
+    // Check that the rook is present and correct type/color
+    auto rookIt = pieces.find(rookPos);
+    if (rookIt == pieces.end() || 
+        rookIt->second.type != PieceType::ROOK || 
+        rookIt->second.color != king.color) {
+        return false;
+    }
+    
+    // Check that squares between king and rook are empty
+    const int startCol = x + direction;
+    const int endCol = direction > 0 ? rookPos.first - 1 : rookPos.first + 1;
+    
+    for (int col = std::min(startCol, endCol); col <= std::max(startCol, endCol); col++) {
+        if (pieces.find({col, y}) != pieces.end()) {
+            return false; // There's a piece in between
+        }
+    }
+    
+    return true;
+}
+
+bool ChessInteraction::isCastlingMove(const BoardPosition& from, const BoardPosition& to) const {
+    auto pieceIt = pieces.find(from);
+    return pieceIt != pieces.end() && 
+           pieceIt->second.type == PieceType::KING && 
+           from.second == to.second && 
+           std::abs(to.first - from.first) == 2;
 }
 
 void ChessInteraction::update(float deltaTime) {
@@ -627,8 +776,8 @@ void ChessInteraction::update(float deltaTime) {
     // but we'll skip it since we don't have access to the window here
     if (awaitingPromotion) {
         // Set all highlights to default state
-        for (int i = 0; i < 4; i++) {
-            promotionSelectionHighlights[i].setFillColor(sf::Color(173, 216, 230, 60));
+        for (auto& highlight : promotionSelectionHighlights) {
+            highlight.setFillColor(sf::Color(173, 216, 230, 60));
         }
     }
 }
@@ -650,12 +799,7 @@ void ChessInteraction::draw(sf::RenderWindow& window) {
         window.draw(highlight);
     }
     
-    // Draw promotion UI if active - we'll draw this after everything else
-    // to ensure it's on top, but we'll save it for later
-    
-    // ... any other UI elements would be drawn here
-    
-    // Now draw the promotion UI if active - this ensures it appears on top of everything
+    // Draw promotion UI if active
     if (awaitingPromotion) {
         // Create a semi-transparent overlay to dim the entire board
         sf::RectangleShape overlay(sf::Vector2f(8 * squareSize, 8 * squareSize));
@@ -672,7 +816,7 @@ void ChessInteraction::draw(sf::RenderWindow& window) {
         window.draw(promotionHeader);
         
         // Draw selection highlights
-        for (int i = 0; i < std::min(static_cast<int>(promotionOptions.size()), 4); i++) {
+        for (size_t i = 0; i < std::min(promotionOptions.size(), static_cast<size_t>(4)); i++) {
             window.draw(promotionSelectionHighlights[i]);
         }
         
@@ -682,5 +826,3 @@ void ChessInteraction::draw(sf::RenderWindow& window) {
         }
     }
 }
-
-// The rest of the ChessInteraction implementation remains unchanged...

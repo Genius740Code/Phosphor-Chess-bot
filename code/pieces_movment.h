@@ -59,6 +59,14 @@ private:
     // Board dimensions
     float squareSize;
     
+    // Track if kings and rooks have moved (for castling)
+    bool whiteKingMoved = false;
+    bool blackKingMoved = false;
+    bool whiteKingsideRookMoved = false;
+    bool whiteQueensideRookMoved = false;
+    bool blackKingsideRookMoved = false;
+    bool blackQueensideRookMoved = false;
+    
     // Private methods
     void calculateLegalMoves();
     std::vector<BoardPosition> getPawnMoves(const BoardPosition& pos, const ChessPiece& piece);
@@ -79,6 +87,15 @@ private:
     void movePiece(const BoardPosition& from, const BoardPosition& to);
     bool isPromotionMove(const BoardPosition& from, const BoardPosition& to) const;
     bool isEnPassantMove(const BoardPosition& from, const BoardPosition& to) const;
+    
+    // Add King moves method
+    std::vector<BoardPosition> getKingMoves(const BoardPosition& pos, const ChessPiece& piece);
+    
+    // Helper for castling
+    bool canCastle(const BoardPosition& kingPos, int direction, const ChessPiece& king);
+    
+    // Add check for castling move
+    bool isCastlingMove(const BoardPosition& from, const BoardPosition& to) const;
 
 public:
     /**
