@@ -1,24 +1,65 @@
-# Compiled object files
+# Compiled Object files
+*.slo
+*.lo
 *.o
 *.obj
 
-# Executables
-*.exe
-chess_board
+# Precompiled Headers
+*.gch
+*.pch
 
-# SFML library files (if included)
+# Compiled Dynamic libraries
+*.so
+*.dylib
 *.dll
 
-# Visual Studio Code settings
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+main
+
+# Build and debug folders
+build/
+Debug/
+Release/
+x64/
+.vs/
+bin/
+obj/
+
+# IDE files
 .vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
 
-# Windows specific
-Thumbs.db
-desktop.ini
+# SFML specific
+sfml-*.dll
 
-# macOS specific
-.DS_Store
+# Log files
+*.log
 
 # Temporary files
 *.tmp
-*~ 
+*~
+*.bak
+
+# Windows specific
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# macOS specific
+.DS_Store
+.AppleDouble
+.LSOverride 
