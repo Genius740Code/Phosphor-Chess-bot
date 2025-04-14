@@ -2,8 +2,14 @@
 
 # Compiler and flags
 CXX = g++
-CXXFLAGS = -Wall -Wextra -O2 -std=c++17 -Icode/include
+CXXFLAGS = -Wall -Wextra -O3 -std=c++17 -Icode/include -march=native
 LDFLAGS = -Lcode/lib -lsfml-graphics -lsfml-window -lsfml-system -lopengl32 -lsfml-audio
+
+# Release-specific flags
+RELEASE_FLAGS = -DNDEBUG -fomit-frame-pointer -flto
+
+# Debug-specific flags
+DEBUG_FLAGS = -g -DDEBUG -O0
 
 # Source files and objects
 SRCDIR = src
@@ -11,30 +17,56 @@ SRCS = $(wildcard $(SRCDIR)/*.cpp)
 OBJS = $(patsubst $(SRCDIR)/%.cpp,%.o,$(SRCS))
 EXECUTABLE = main
 
-.PHONY: all clean debug release run
+# Check OS for command compatibility
+ifeq ($(OS),Windows_NT)
+    # Windows commands
+    RM = del /Q
+    RMDIR = rmdir /S /Q
+    EXE_EXT = .exe
+else
+    # Linux/Mac commands
+    RM = rm -f
+    RMDIR = rm -rf
+    EXE_EXT = 
+endif
 
-all: $(EXECUTABLE)
+.PHONY: all clean debug release run profile benchmark
+
+all: release
 
 # Debug build with debugging symbols
-debug: CXXFLAGS += -g -DDEBUG
-debug: clean all
+debug: CXXFLAGS += $(DEBUG_FLAGS)
+debug: clean $(EXECUTABLE)
 
 # Release build with full optimization
-release: CXXFLAGS += -O3 -march=native -DNDEBUG
-release: clean all
+release: CXXFLAGS += $(RELEASE_FLAGS)
+release: clean $(EXECUTABLE)
+
+# Profile-guided optimization (two-stage build)
+profile:
+	@echo "Building instrumented executable for profile generation..."
+	$(CXX) $(CXXFLAGS) -fprofile-generate $(SRCS) -o $(EXECUTABLE)_profile$(EXE_EXT) $(LDFLAGS)
+	@echo "Run the profile executable, then use 'make benchmark' to build optimized version."
+
+# Build optimized using the profile data
+benchmark: CXXFLAGS += $(RELEASE_FLAGS) -fprofile-use
+benchmark: clean
+	$(CXX) $(CXXFLAGS) $(SRCS) -o $(EXECUTABLE)$(EXE_EXT) $(LDFLAGS)
+	@echo "Profile-optimized build complete: $(EXECUTABLE)"
 
 %.o: $(SRCDIR)/%.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 $(EXECUTABLE): $(OBJS)
-	$(CXX) $^ -o $@ $(LDFLAGS)
+	$(CXX) $^ -o $@$(EXE_EXT) $(LDFLAGS)
 	@echo "Build complete: $@"
+	@echo "Run with: ./$(EXECUTABLE)"
 
 clean:
-	rm -f *.o $(EXECUTABLE).exe $(EXECUTABLE)
+	$(RM) *.o $(EXECUTABLE)$(EXE_EXT) $(EXECUTABLE) $(EXECUTABLE)_profile$(EXE_EXT) $(EXECUTABLE)_profile
 
 run: all
-	./$(EXECUTABLE)
+	./$(EXECUTABLE)$(EXE_EXT)
 
 # Git checkpoint target
 git-checkpoint:

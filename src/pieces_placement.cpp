@@ -1,6 +1,7 @@
 #include "pieces_placement.h"
 #include <iostream>
 #include <filesystem>
+#include <unordered_map>
 
 // Initialize static instance pointer
 PieceTextureManager* PieceTextureManager::instance = nullptr;
@@ -69,8 +70,8 @@ bool PieceTextureManager::loadTextures(float scaleFactor) {
     return allLoaded;
 }
 
-// Fast lookup mapping of FEN characters to piece types
-const std::map<char, PieceType> FEN_TO_PIECE_TYPE = {
+// Fast lookup mapping of FEN characters to piece types - using unordered_map for better performance
+const std::unordered_map<char, PieceType> FEN_TO_PIECE_TYPE = {
     {'p', PieceType::PAWN},   {'P', PieceType::PAWN},
     {'r', PieceType::ROOK},   {'R', PieceType::ROOK},
     {'n', PieceType::KNIGHT}, {'N', PieceType::KNIGHT},
@@ -91,7 +92,7 @@ PieceColor getColorFromFEN(char fenChar) {
 
 // Get piece texture key from FEN character - optimized using static map
 std::string getTextureKeyFromFEN(char fenChar) {
-    static const std::map<char, std::string> pieceMap = {
+    static const std::unordered_map<char, std::string> pieceMap = {
         {'p', "pawn"}, {'r', "rook"}, {'n', "knight"}, 
         {'b', "bishop"}, {'q', "queen"}, {'k', "king"}
     };
@@ -114,53 +115,113 @@ void setupPositionFromFEN(std::map<std::pair<int, int>, ChessPiece>& pieces, con
     auto& textureManager = PieceTextureManager::getInstance();
     
     // Parse board position (first part of FEN)
-    std::string boardFEN = fen.substr(0, fen.find(' '));
+    std::string boardFEN;
+    size_t spacePos = fen.find(' ');
+    if (spacePos != std::string::npos) {
+        boardFEN = fen.substr(0, spacePos);
+    } else {
+        boardFEN = fen; // Use the whole string if no space found
+    }
     
     int row = 0;
     int col = 0;
     
+    // Pre-check for valid FEN string (should have 8 rows)
+    int rowCount = 1; // Start with 1 because we count separators
     for (char c : boardFEN) {
+        if (c == '/') rowCount++;
+    }
+    
+    if (rowCount != 8) {
+        std::cerr << "Warning: FEN string does not have 8 rows. It has " << rowCount << " rows." << std::endl;
+        // Continue anyway - we'll handle this gracefully
+    }
+    
+    auto charIt = boardFEN.begin();
+    auto endIt = boardFEN.end();
+    
+    // Row and column bounds checking
+    while (charIt != endIt && row < 8) {
+        char c = *charIt++;
+        
         if (c == '/') {
-            // Move to next row
+            // Move to next row, reset column
             row++;
             col = 0;
+            
+            // Skip invalid rows
+            if (row >= 8) break;
         } else if (std::isdigit(c)) {
             // Skip empty squares
-            col += c - '0';
-        } else if (std::isalpha(c)) {
-            // Place a piece
-            std::string textureKey = getTextureKeyFromFEN(c);
-            const sf::Texture* texture = textureManager.getTexture(textureKey);
+            int emptyCount = c - '0';
             
-            if (!textureKey.empty() && texture) {
-                ChessPiece piece{
-                    FEN_TO_PIECE_TYPE.at(c),
-                    getColorFromFEN(c),
-                    sf::Sprite(*texture)
-                };
-                
-                // Direct calculation of scaling and positioning for performance
-                float textureWidth = texture->getSize().x;
-                float textureHeight = texture->getSize().y;
-                float scaleFactor = textureManager.getScale();
-                float scaleX = (SQUARE_SIZE / textureWidth) * scaleFactor;
-                float scaleY = (SQUARE_SIZE / textureHeight) * scaleFactor;
-                
-                piece.sprite.setScale(scaleX, scaleY);
-                
-                // Position the piece with center alignment
-                float offsetX = (SQUARE_SIZE - (textureWidth * scaleX)) / 2;
-                float offsetY = (SQUARE_SIZE - (textureHeight * scaleY)) / 2;
-                
-                piece.sprite.setPosition(
-                    col * SQUARE_SIZE + offsetX,
-                    row * SQUARE_SIZE + offsetY
-                );
-                
-                pieces[{col, row}] = std::move(piece);
+            // Check for invalid column bounds
+            if (col + emptyCount > 8) {
+                std::cerr << "Warning: FEN string specifies too many columns in row " << row + 1 << std::endl;
+                // Clamp to valid range
+                emptyCount = 8 - col;
             }
             
-            col++;
+            col += emptyCount;
+        } else if (std::isalpha(c)) {
+            // Place a piece (only if within bounds)
+            if (col < 8) {
+                // Check if valid piece character
+                auto fenIt = FEN_TO_PIECE_TYPE.find(c);
+                if (fenIt == FEN_TO_PIECE_TYPE.end()) {
+                    std::cerr << "Warning: Invalid piece character '" << c << "' in FEN string" << std::endl;
+                    col++; // Skip this character
+                    continue;
+                }
+                
+                std::string textureKey = getTextureKeyFromFEN(c);
+                const sf::Texture* texture = textureManager.getTexture(textureKey);
+                
+                if (!textureKey.empty()) {
+                    ChessPiece piece{
+                        fenIt->second,
+                        getColorFromFEN(c),
+                        sf::Sprite()  // Initialize with empty sprite in case texture is missing
+                    };
+                    
+                    // Only set up sprite if texture is available
+                    if (texture) {
+                        piece.sprite = sf::Sprite(*texture);
+                        
+                        // Direct calculation of scaling and positioning for performance
+                        float textureWidth = texture->getSize().x;
+                        float textureHeight = texture->getSize().y;
+                        float scaleFactor = textureManager.getScale();
+                        float scaleX = (SQUARE_SIZE / textureWidth) * scaleFactor;
+                        float scaleY = (SQUARE_SIZE / textureHeight) * scaleFactor;
+                        
+                        piece.sprite.setScale(scaleX, scaleY);
+                        
+                        // Position the piece with center alignment
+                        float offsetX = (SQUARE_SIZE - (textureWidth * scaleX)) / 2;
+                        float offsetY = (SQUARE_SIZE - (textureHeight * scaleY)) / 2;
+                        
+                        piece.sprite.setPosition(
+                            col * SQUARE_SIZE + offsetX,
+                            row * SQUARE_SIZE + offsetY
+                        );
+                    }
+                    
+                    pieces[{col, row}] = std::move(piece);
+                }
+                
+                col++;
+            } else {
+                std::cerr << "Warning: FEN string has too many pieces in row " << row + 1 << std::endl;
+                // Skip to next row
+                while (charIt != endIt && *charIt != '/') charIt++;
+                if (charIt != endIt) charIt++; // Skip the '/'
+                row++;
+                col = 0;
+            }
+        } else {
+            // Skip invalid characters
+            std::cerr << "Warning: Invalid character '" << c << "' in FEN string" << std::endl;
         }
     }
 }
