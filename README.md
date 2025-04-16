@@ -38,7 +38,7 @@ A feature-rich chess game built with C++ and SFML graphics library. This game pr
 
 3. **Clone the repository**:
    ```
-   git clone https://github.com/yourusername/chess-game.git
+   git clone https://github.com/Genius740Code/Phosphor-Chess-bot.git
    cd chess-game
    ```
 
