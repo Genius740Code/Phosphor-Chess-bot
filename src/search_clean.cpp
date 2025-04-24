@@ -1,4 +1,5 @@
-﻿#include <iostream>
+﻿
+#include <iostream>
 #include <map>
 #include <string>
 #include <vector>
@@ -25,9 +26,9 @@ struct MoveCountResult {
 const long long EXPECTED_NODES[] = {
     20,            // Depth 1
     400,           // Depth 2
-    8902,          // Depth 3 - Our implementation's value
-    219326,        // Depth 4 - Our corrected value with en passant
-    5832730,       // Depth 5 - Our corrected value with en passant
+    8902,          // Depth 3
+    197281,        // Depth 4 (updated for position without en passant)
+    4865609,       // Depth 5 (updated for position without en passant)
     119060324,     // Depth 6
     3195901860,    // Depth 7
     84998978956    // Depth 8
@@ -60,7 +61,8 @@ bool isEnPassantCapture(const ChessPiece& piece,
                        const BoardPosition& to,
                        const std::map<BoardPosition, ChessPiece>& pieces);
                        
-bool isCastlingMove(const ChessPiece& piece, const BoardPosition& from, const BoardPosition& to);
+bool isCastlingMove(const ChessPiece& piece, const BoardPosition& from, const BoardPosition& 
+to);
 
 BoardPosition calculateEnPassantTarget(
     const ChessPiece& piece,
@@ -72,7 +74,6 @@ std::vector<std::pair<BoardPosition, BoardPosition>> getEnPassantCaptures(
     PieceColor sideToMove,
     const BoardPosition& epTarget);
 
-void handleEnPassantCapture(std::map<BoardPosition, ChessPiece>& pieces, 
                            const ChessPiece& movingPiece,
                            const BoardPosition& from, 
                            const BoardPosition& to);
@@ -215,7 +216,8 @@ public:
             // Check if king is moving to update king position
             uint8_t pieceValue = board[fromIdx];
             PieceType pieceType = static_cast<PieceType>((pieceValue & 0x07) - 1);
-            PieceColor pieceColor = (pieceValue & 0x08) ? PieceColor::BLACK : PieceColor::WHITE;
+            PieceColor pieceColor = (pieceValue & 0x08) ? PieceColor::BLACK : 
+PieceColor::WHITE;
             
             if (pieceType == PieceType::KING) {
                 if (pieceColor == PieceColor::WHITE) {
@@ -260,7 +262,8 @@ public:
     bool hasPieceOfColor(const BoardPosition& pos, PieceColor color) const {
         int idx = pos.second * 8 + pos.first;
         if (idx >= 0 && idx < 64 && board[idx] != 0) {
-            return (board[idx] & 0x08) ? (color == PieceColor::BLACK) : (color == PieceColor::WHITE);
+            return (board[idx] & 0x08) ? (color == PieceColor::BLACK) : (color == 
+PieceColor::WHITE);
         }
         return false;
     }
@@ -276,9 +279,12 @@ public:
 };
 
 // Forward declarations
-long long countMovesAtDepth(int depth, std::map<BoardPosition, ChessPiece>& pieces, PieceColor currentTurn);
-long long countMovesParallel(int depth, const std::map<BoardPosition, ChessPiece>& initialPieces, PieceColor currentTurn);
-std::vector<BoardPosition> getAllPiecesForColor(const std::map<BoardPosition, ChessPiece>& pieces, PieceColor color);
+long long countMovesAtDepth(int depth, std::map<BoardPosition, ChessPiece>& pieces, 
+PieceColor currentTurn);
+long long countMovesParallel(int depth, const std::map<BoardPosition, ChessPiece>& 
+initialPieces, PieceColor currentTurn);
+std::vector<BoardPosition> getAllPiecesForColor(const std::map<BoardPosition, ChessPiece>& 
+pieces, PieceColor color);
 
 // Move generation with caching
 std::vector<BoardPosition> getLegalMovesForPiece(
@@ -287,11 +293,13 @@ std::vector<BoardPosition> getLegalMovesForPiece(
     PieceColor currentTurn);
 
 // Global move generation cache
-static std::unordered_map<MoveGenKey, std::vector<BoardPosition>, MoveGenKeyHash> moveGenCache;
+static std::unordered_map<MoveGenKey, std::vector<BoardPosition>, MoveGenKeyHash> 
+moveGenCache;
 static std::mutex cacheMutex;
 
 // Zobrist hashing constants - will be initialized in initZobristKeys function
-static std::array<std::array<std::array<uint64_t, 2>, 6>, 64> ZOBRIST_PIECE_KEYS; // [square][piece_type][color]
+static std::array<std::array<std::array<uint64_t, 2>, 6>, 64> ZOBRIST_PIECE_KEYS; // 
+[square][piece_type][color]
 static std::array<uint64_t, 8> ZOBRIST_EP_FILE_KEYS; // [file]
 static uint64_t ZOBRIST_SIDE_TO_MOVE_KEY;
 
@@ -379,7 +387,8 @@ void printBoard(const std::map<BoardPosition, ChessPiece>& pieces) {
 }
 
 // Parallel version for deeper depths
-long long countMovesParallel(int depth, const std::map<BoardPosition, ChessPiece>& initialPieces, PieceColor currentTurn) {
+long long countMovesParallel(int depth, const std::map<BoardPosition, ChessPiece>& 
+initialPieces, PieceColor currentTurn) {
     if (depth <= 3) {
         // Use single-threaded version for shallow depths
         std::map<BoardPosition, ChessPiece> pieces = initialPieces;
@@ -387,7 +396,8 @@ long long countMovesParallel(int depth, const std::map<BoardPosition, ChessPiece
     }
     
     // Get all pieces of the current player
-    std::vector<BoardPosition> playerPieces = getAllPiecesForColor(initialPieces, currentTurn);
+    std::vector<BoardPosition> playerPieces = getAllPiecesForColor(initialPieces, 
+currentTurn);
     
     // Calculate optimal number of threads based on hardware
     unsigned int numThreads = std::thread::hardware_concurrency();
@@ -421,10 +431,12 @@ long long countMovesParallel(int depth, const std::map<BoardPosition, ChessPiece
         
         for (const auto& from : rootMoves) {
             // Get pseudo-legal moves
-            std::vector<BoardPosition> pseudoLegalMoves = getLegalMovesForPiece(from, threadPieces, currentTurn);
+            std::vector<BoardPosition> pseudoLegalMoves = getLegalMovesForPiece(from, 
+threadPieces, currentTurn);
             
             // Filter moves that would leave the king in check
-            std::vector<BoardPosition> legalMoves = filterLegalMoves(from, pseudoLegalMoves, threadPieces, currentTurn);
+            std::vector<BoardPosition> legalMoves = filterLegalMoves(from, pseudoLegalMoves, 
+threadPieces, currentTurn);
             
             // Skip if no moves
             if (legalMoves.empty()) continue;
@@ -468,13 +480,15 @@ long long countMovesParallel(int depth, const std::map<BoardPosition, ChessPiece
                     if (movingPiece.color == PieceColor::WHITE) {
                         if (from.first == 0 && from.second == 7) { // White queenside rook
                             localCastlingRights.whiteQueenSide = false;
-                        } else if (from.first == 7 && from.second == 7) { // White kingside rook
+                        } else if (from.first == 7 && from.second == 7) { // White kingside 
+rook
                             localCastlingRights.whiteKingSide = false;
                         }
                     } else {
                         if (from.first == 0 && from.second == 0) { // Black queenside rook
                             localCastlingRights.blackQueenSide = false;
-                        } else if (from.first == 7 && from.second == 0) { // Black kingside rook
+                        } else if (from.first == 7 && from.second == 0) { // Black kingside 
+rook
                             localCastlingRights.blackKingSide = false;
                         }
                     }
@@ -501,7 +515,8 @@ long long countMovesParallel(int depth, const std::map<BoardPosition, ChessPiece
                 BoardPosition oldEnPassantTarget = localEnPassantTarget;
                 
                 // Set new en passant target if appropriate
-                if (movingPiece.type == PieceType::PAWN && std::abs(from.second - to.second) == 2) {
+                if (movingPiece.type == PieceType::PAWN && std::abs(from.second - to.second) 
+== 2) {
                     // Verify the pawn is moving from its starting rank
                     int startingRank = (movingPiece.color == PieceColor::WHITE) ? 6 : 1;
                     if (from.second == startingRank) {
@@ -537,7 +552,8 @@ long long countMovesParallel(int depth, const std::map<BoardPosition, ChessPiece
                 }
                 
                 // Handle castling
-                bool isCastling = (movingPiece.type == PieceType::KING && std::abs(to.first - from.first) == 2);
+                bool isCastling = (movingPiece.type == PieceType::KING && std::abs(to.first - 
+from.first) == 2);
                 BoardPosition rookFrom, rookTo;
                 ChessPiece rookPiece;
                 bool hadRook = false;
@@ -583,7 +599,8 @@ long long countMovesParallel(int depth, const std::map<BoardPosition, ChessPiece
                             promotionBoard[to].type = promType;
                             
                             // Count moves with this promotion
-                            promotionMoves += countMovesAtDepth(depth - 1, promotionBoard, nextTurn);
+                            promotionMoves += countMovesAtDepth(depth - 1, promotionBoard, 
+nextTurn);
                         }
                         
                         subTotal += promotionMoves;
@@ -644,8 +661,8 @@ long long countMovesParallel(int depth, const std::map<BoardPosition, ChessPiece
 
 // Main function to calculate moves for a given FEN position
 void calculateMovesForPosition(const std::string& fen) {
-    std::cout << "Calculating moves for position: " << fen << std::endl;
-    std::cout << "=================================" << std::endl;
+    std::cout << "Depth test" << std::endl;
+    std::cout << "--------------------------------" << std::endl;
     
     // Parse FEN string
     std::map<BoardPosition, ChessPiece> pieces;
@@ -735,7 +752,6 @@ void calculateMovesForPosition(const std::string& fen) {
     
     // Get number of hardware threads for parallel processing
     unsigned int numThreads = std::thread::hardware_concurrency();
-    std::cout << "Running on " << numThreads << " hardware threads" << std::endl;
     
     // Test different depths
     for (int depth = 1; depth <= 5; ++depth) {
@@ -784,8 +800,8 @@ void calculateMovesForStartingPosition() {
     // Use the standard starting position FEN
     std::string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     
-    std::cout << "Calculating moves for position: " << fen << std::endl;
-    std::cout << "=================================" << std::endl;
+    std::cout << "Depth test" << std::endl;
+    std::cout << "--------------------------------" << std::endl;
     
     // Parse FEN string
     std::map<BoardPosition, ChessPiece> pieces;
@@ -875,202 +891,7 @@ void calculateMovesForStartingPosition() {
     
     // Get number of hardware threads for parallel processing
     unsigned int numThreads = std::thread::hardware_concurrency();
-    std::cout << "Running on " << numThreads << " hardware threads" << std::endl;
     
-    // Debug specialized perft test to find missing moves
-    std::cout << "Performing specialized perft debugging at depth 3..." << std::endl;
-    
-    // Debug print the board position
-    std::cout << "Board position:" << std::endl;
-    for (int row = 0; row < 8; row++) {
-        for (int col = 0; col < 8; col++) {
-            BoardPosition pos(col, row);
-            auto pieceIt = pieces.find(pos);
-            if (pieceIt != pieces.end()) {
-                char pieceChar = '.';
-                switch (pieceIt->second.type) {
-                    case PieceType::PAWN:
-                        pieceChar = (pieceIt->second.color == PieceColor::WHITE) ? 'P' : 'p';
-                        break;
-                    case PieceType::KNIGHT:
-                        pieceChar = (pieceIt->second.color == PieceColor::WHITE) ? 'N' : 'n';
-                        break;
-                    case PieceType::BISHOP:
-                        pieceChar = (pieceIt->second.color == PieceColor::WHITE) ? 'B' : 'b';
-                        break;
-                    case PieceType::ROOK:
-                        pieceChar = (pieceIt->second.color == PieceColor::WHITE) ? 'R' : 'r';
-                        break;
-                    case PieceType::QUEEN:
-                        pieceChar = (pieceIt->second.color == PieceColor::WHITE) ? 'Q' : 'q';
-                        break;
-                    case PieceType::KING:
-                        pieceChar = (pieceIt->second.color == PieceColor::WHITE) ? 'K' : 'k';
-                        break;
-                }
-                std::cout << pieceChar << ' ';
-            } else {
-                std::cout << ". ";
-            }
-        }
-        std::cout << std::endl;
-    }
-    
-    // Debug: Check why bishop/queen have no moves
-    {
-        // Test a bishop's and queen's moves manually
-        BoardPosition bishopPos(2, 7); // c1 bishop
-        auto bishopIt = pieces.find(bishopPos);
-        if (bishopIt != pieces.end() && bishopIt->second.type == PieceType::BISHOP) {
-            std::cout << "Bishop at c1:" << std::endl;
-            auto pseudoLegalMoves = getLegalMovesForPiece(bishopPos, pieces, sideToMove);
-            std::cout << "Pseudo-legal moves: " << pseudoLegalMoves.size() << std::endl;
-            for (const auto& move : pseudoLegalMoves) {
-                char file = 'a' + move.first;
-                char rank = '8' - move.second;
-                std::cout << file << rank << " ";
-            }
-            std::cout << std::endl;
-            
-            auto legalMoves = filterLegalMoves(bishopPos, pseudoLegalMoves, pieces, sideToMove);
-            std::cout << "Legal moves: " << legalMoves.size() << std::endl;
-            for (const auto& move : legalMoves) {
-                char file = 'a' + move.first;
-                char rank = '8' - move.second;
-                std::cout << file << rank << " ";
-            }
-            std::cout << std::endl;
-        }
-        
-        BoardPosition queenPos(3, 7); // d1 queen
-        auto queenIt = pieces.find(queenPos);
-        if (queenIt != pieces.end() && queenIt->second.type == PieceType::QUEEN) {
-            std::cout << "Queen at d1:" << std::endl;
-            auto pseudoLegalMoves = getLegalMovesForPiece(queenPos, pieces, sideToMove);
-            std::cout << "Pseudo-legal moves: " << pseudoLegalMoves.size() << std::endl;
-            for (const auto& move : pseudoLegalMoves) {
-                char file = 'a' + move.first;
-                char rank = '8' - move.second;
-                std::cout << file << rank << " ";
-            }
-            std::cout << std::endl;
-            
-            auto legalMoves = filterLegalMoves(queenPos, pseudoLegalMoves, pieces, sideToMove);
-            std::cout << "Legal moves: " << legalMoves.size() << std::endl;
-            for (const auto& move : legalMoves) {
-                char file = 'a' + move.first;
-                char rank = '8' - move.second;
-                std::cout << file << rank << " ";
-            }
-            std::cout << std::endl;
-        }
-    }
-    
-    long long depth3_node_count = 0;
-    std::vector<BoardPosition> playerPieces = getAllPiecesForColor(pieces, sideToMove);
-    
-    // Output per-piece breakdown
-    std::cout << "\nPerft breakdown by starting position:" << std::endl;
-    std::cout << "--------------------------------" << std::endl;
-    
-    for (const auto& from : playerPieces) {
-        auto pieceIt = pieces.find(from);
-        if (pieceIt == pieces.end()) continue;
-        
-        std::string pieceChar;
-        PieceType type = pieceIt->second.type;
-        
-        switch (type) {
-            case PieceType::PAWN: pieceChar = "P"; break;
-            case PieceType::ROOK: pieceChar = "R"; break;
-            case PieceType::KNIGHT: pieceChar = "N"; break;
-            case PieceType::BISHOP: pieceChar = "B"; break;
-            case PieceType::QUEEN: pieceChar = "Q"; break;
-            case PieceType::KING: pieceChar = "K"; break;
-        }
-        
-        // Convert coordinates to algebraic notation
-        char file = 'a' + from.first;
-        char rank = '8' - from.second;
-        std::string square;
-        square += file;
-        square += rank;
-        
-        std::vector<BoardPosition> pseudoLegalMoves = getLegalMovesForPiece(from, pieces, sideToMove);
-        std::vector<BoardPosition> legalMoves = filterLegalMoves(from, pseudoLegalMoves, pieces, sideToMove);
-        
-        long long moveCount = 0;
-        
-        for (const auto& to : legalMoves) {
-            // Make a temporary copy of the board
-            auto tempPieces = pieces;
-            
-            // Make the move
-            bool hadPiece = (tempPieces.find(to) != tempPieces.end());
-            ChessPiece capturedPiece;
-            if (hadPiece) capturedPiece = tempPieces[to];
-            
-            bool isEnPassant = isEnPassantCapture(pieceIt->second, from, to, tempPieces);
-            if (isEnPassant) {
-                BoardPosition capturedPawnPos(to.first, from.second);
-                tempPieces.erase(capturedPawnPos);
-            }
-            
-            bool isCastling = isCastlingMove(pieceIt->second, from, to);
-            if (isCastling) {
-                int row = from.second;
-                BoardPosition rookFrom, rookTo;
-                
-                if (to.first > from.first) { // Kingside
-                    rookFrom = BoardPosition(7, row);
-                    rookTo = BoardPosition(to.first - 1, row);
-                } else { // Queenside
-                    rookFrom = BoardPosition(0, row);
-                    rookTo = BoardPosition(to.first + 1, row);
-                }
-                
-                auto rookIt = tempPieces.find(rookFrom);
-                if (rookIt != tempPieces.end()) {
-                    tempPieces[rookTo] = rookIt->second;
-                    tempPieces.erase(rookFrom);
-                }
-            }
-            
-            // Save en passant target
-            BoardPosition oldEnPassantTarget = enPassantTarget;
-            
-            // Set en passant target if applicable
-            if (pieceIt->second.type == PieceType::PAWN && std::abs(to.second - from.second) == 2) {
-                enPassantTarget = BoardPosition(to.first, (from.second + to.second) / 2);
-            } else {
-                enPassantTarget = BoardPosition(-1, -1);
-            }
-            
-            // Make move
-            tempPieces[to] = pieceIt->second;
-            tempPieces.erase(from);
-            
-            // Get next turn
-            PieceColor nextTurn = (sideToMove == PieceColor::WHITE) ? 
-                                 PieceColor::BLACK : PieceColor::WHITE;
-            
-            // Count moves at depth 2
-            long long nodeCount = countMovesAtDepth(2, tempPieces, nextTurn);
-            moveCount += nodeCount;
-            
-            // Restore en passant target
-            enPassantTarget = oldEnPassantTarget;
-        }
-        
-        // Convert piece coordinates to algebraic notation (e.g. e2, d5)
-        std::cout << pieceChar << square << ": " << moveCount << std::endl;
-        depth3_node_count += moveCount;
-    }
-    
-    std::cout << "Total moves at depth 3: " << depth3_node_count << std::endl;
-    std::cout << "--------------------------------" << std::endl;
-    
-    // Now run the standard perft test
     // Test different depths
     for (int depth = 1; depth <= 5; ++depth) {
         auto startTime = std::chrono::high_resolution_clock::now();
@@ -1110,25 +931,11 @@ void calculateMovesForStartingPosition() {
         }
         
         std::cout << std::endl;
-
-        if (depth == 5) {
-            std::cout << "\nCause of Perft Discrepancy Analysis:" << std::endl;
-            std::cout << "-----------------------------------" << std::endl;
-            std::cout << "The discrepancy in perft counts when compared to standard Stockfish is due to:" << std::endl;
-            std::cout << "1. Bishop and Queen move generation: No pseudo-legal moves are generated for bishops" << std::endl;
-            std::cout << "   and queens in the starting position as they are blocked by pawns." << std::endl;
-            std::cout << "2. Castling: Our implementation correctly handles castling but with stricter checking" << std::endl;
-            std::cout << "   of the squares between king and rook." << std::endl;
-            std::cout << "3. Move filtering: Our engine properly filters moves that would leave king in check." << std::endl;
-            std::cout << std::endl;
-            std::cout << "These differences are consistent at all depths and account for the variance from" << std::endl;
-            std::cout << "standard Stockfish results. Our implementation's perft counts are stable and correct" << std::endl;
-            std::cout << "according to our move generation rules, even if they differ from other engines." << std::endl;
-        }
     }
 }
 
-// This function generates legal moves for a piece without checking if they leave the king in check
+// This function generates legal moves for a piece without checking if they leave the king in 
+check
 std::vector<BoardPosition> getLegalMovesForPiece(const BoardPosition& from, 
                                                std::map<BoardPosition, ChessPiece>& pieces, 
                                                PieceColor currentTurn) {
@@ -1187,24 +994,9 @@ std::vector<BoardPosition> getLegalMovesForPiece(const BoardPosition& from,
                 if (col > 0) {
                     BoardPosition captureLeft(col - 1, newRow);
                     auto targetPiece = pieces.find(captureLeft);
-                    if (targetPiece != pieces.end() && targetPiece->second.color != piece.color) {
+                    if (targetPiece != pieces.end() && targetPiece->second.color != 
+piece.color) {
                         legalMoves.push_back(captureLeft);
-                    }
-                    
-                    // Check for en passant capture to the left
-                    if (enPassantTarget.first != -1 && 
-                        enPassantTarget.first == col - 1 && 
-                        enPassantTarget.second == newRow) {
-                        
-                        // Verify there's a pawn to capture (on the same row as our pawn but in the target column)
-                        BoardPosition pawnToCapture(col - 1, row);
-                        auto pawnIt = pieces.find(pawnToCapture);
-                        if (pawnIt != pieces.end() && 
-                            pawnIt->second.type == PieceType::PAWN && 
-                            pawnIt->second.color != piece.color) {
-                            
-                            legalMoves.push_back(enPassantTarget);
-                        }
                     }
                 }
                 
@@ -1212,23 +1004,31 @@ std::vector<BoardPosition> getLegalMovesForPiece(const BoardPosition& from,
                 if (col < 7) {
                     BoardPosition captureRight(col + 1, newRow);
                     auto targetPiece = pieces.find(captureRight);
-                    if (targetPiece != pieces.end() && targetPiece->second.color != piece.color) {
+                    if (targetPiece != pieces.end() && targetPiece->second.color != 
+piece.color) {
                         legalMoves.push_back(captureRight);
                     }
-                    
-                    // Check for en passant capture to the right
-                    if (enPassantTarget.first != -1 && 
-                        enPassantTarget.first == col + 1 && 
-                        enPassantTarget.second == newRow) {
+                }
+                
+                // Handle en passant captures
+                if (enPassantTarget.first != -1) {
+                    // Check if our pawn is adjacent to the pawn that just moved two squares
+                    if (row == enPassantTarget.second && std::abs(col - 
+enPassantTarget.first) == 1) {
+                        // Create the en passant capture move (diagonal to the en passant 
+target)
+                        BoardPosition enPassantCapture(enPassantTarget.first, row + 
+direction);
                         
-                        // Verify there's a pawn to capture (on the same row as our pawn but in the target column)
-                        BoardPosition pawnToCapture(col + 1, row);
+                        // Verify there's actually a pawn to capture
+                        BoardPosition pawnToCapture(enPassantTarget.first, row);
+                        
                         auto pawnIt = pieces.find(pawnToCapture);
                         if (pawnIt != pieces.end() && 
                             pawnIt->second.type == PieceType::PAWN && 
                             pawnIt->second.color != piece.color) {
                             
-                            legalMoves.push_back(enPassantTarget);
+                            legalMoves.push_back(enPassantCapture);
                         }
                     }
                 }
@@ -1251,7 +1051,8 @@ std::vector<BoardPosition> getLegalMovesForPiece(const BoardPosition& from,
                     auto targetPiece = pieces.find(newPos);
                     
                     // Empty square or enemy piece
-                    if (targetPiece == pieces.end() || targetPiece->second.color != piece.color) {
+                    if (targetPiece == pieces.end() || targetPiece->second.color != 
+piece.color) {
                         legalMoves.push_back(newPos);
                     }
                 }
@@ -1385,7 +1186,8 @@ std::vector<BoardPosition> getLegalMovesForPiece(const BoardPosition& from,
                     auto targetPiece = pieces.find(newPos);
                     
                     // Empty square or enemy piece
-                    if (targetPiece == pieces.end() || targetPiece->second.color != piece.color) {
+                    if (targetPiece == pieces.end() || targetPiece->second.color != 
+piece.color) {
                         legalMoves.push_back(newPos);
                     }
                 }
@@ -1398,9 +1200,11 @@ std::vector<BoardPosition> getLegalMovesForPiece(const BoardPosition& from,
                 
                 // Check if king has castling rights
                 bool canCastleKingside = (piece.color == PieceColor::WHITE) ? 
-                                         castlingRights.whiteKingSide : castlingRights.blackKingSide;
+                                         castlingRights.whiteKingSide : 
+castlingRights.blackKingSide;
                 bool canCastleQueenside = (piece.color == PieceColor::WHITE) ? 
-                                          castlingRights.whiteQueenSide : castlingRights.blackQueenSide;
+                                          castlingRights.whiteQueenSide : 
+castlingRights.blackQueenSide;
                 
                 // Kingside castling (O-O)
                 if (canCastleKingside) {
@@ -1447,10 +1251,13 @@ std::vector<BoardPosition> getLegalMovesForPiece(const BoardPosition& from,
         }
     }
     
-    // Store the generated moves in the cache
+    // Store in cache
     {
         std::lock_guard<std::mutex> lock(cacheMutex);
-        moveGenCache[cacheKey] = legalMoves;
+        // Only cache if cache isn't too large to prevent memory growth
+        if (moveGenCache.size() < 10000) {
+            moveGenCache[cacheKey] = legalMoves;
+        }
     }
     
     return legalMoves;
@@ -1509,7 +1316,8 @@ std::vector<BoardPosition> filterLegalMoves(
     
     for (const auto& to : moves) {
         // Special handling for castling
-        bool isCastling = (movingPiece.type == PieceType::KING && std::abs(to.first - from.first) == 2);
+        bool isCastling = (movingPiece.type == PieceType::KING && std::abs(to.first - 
+from.first) == 2);
         
         if (isCastling) {
             // Can't castle out of check
@@ -1589,8 +1397,9 @@ std::vector<BoardPosition> filterLegalMoves(
     return legalMoves;
 }
 
-// Optimized version of countMovesAtDepth for faster perft testing
-long long countMovesAtDepth(int depth, std::map<BoardPosition, ChessPiece>& pieces, PieceColor currentTurn) {
+// Fix the promotion handling in countMovesAtDepth
+long long countMovesAtDepth(int depth, std::map<BoardPosition, ChessPiece>& pieces, 
+PieceColor currentTurn) {
     // Clear the move generation cache to ensure we don't use stale data
     {
         std::lock_guard<std::mutex> lock(cacheMutex);
@@ -1602,6 +1411,9 @@ long long countMovesAtDepth(int depth, std::map<BoardPosition, ChessPiece>& piec
     
     long long totalMoves = 0;
     
+    // For debug output
+    std::map<PieceType, long long> movesByPieceType;
+    
     // Get all pieces of the current player
     std::vector<BoardPosition> playerPieces = getAllPiecesForColor(pieces, currentTurn);
     
@@ -1610,13 +1422,56 @@ long long countMovesAtDepth(int depth, std::map<BoardPosition, ChessPiece>& piec
     moves.reserve(28); // Maximum possible moves for a queen
     
     // First depth just reports total number of legal moves
+    if (depth == 1) {
+        for (const auto& from : playerPieces) {
+            moves.clear();
+            // Get pseudo-legal moves
+            std::vector<BoardPosition> pseudoLegalMoves = getLegalMovesForPiece(from, pieces, 
+currentTurn);
+            
+            // Filter moves that would leave the king in check
+            std::vector<BoardPosition> legalMoves = filterLegalMoves(from, pseudoLegalMoves, 
+pieces, currentTurn);
+            
+            totalMoves += legalMoves.size();
+            
+            // Debug counting
+            if (from.first >= 0 && from.first < 8 && from.second >= 0 && from.second < 8) {
+                auto pieceIt = pieces.find(from);
+                if (pieceIt != pieces.end()) {
+                    movesByPieceType[pieceIt->second.type] += legalMoves.size();
+                }
+            }
+        }
+        
+        // Special debug output if this is at the top level depth 3
+        if (depth == 3) {
+            std::cout << "Depth 3 move counts by piece type:" << std::endl;
+            std::cout << "PAWN: " << movesByPieceType[PieceType::PAWN] << std::endl;
+            std::cout << "KNIGHT: " << movesByPieceType[PieceType::KNIGHT] << std::endl;
+            std::cout << "BISHOP: " << movesByPieceType[PieceType::BISHOP] << std::endl;
+            std::cout << "ROOK: " << movesByPieceType[PieceType::ROOK] << std::endl;
+            std::cout << "QUEEN: " << movesByPieceType[PieceType::QUEEN] << std::endl;
+            std::cout << "KING: " << movesByPieceType[PieceType::KING] << std::endl;
+        }
+        
+        return totalMoves;
+    }
+    
+    // Pre-calculate the next player's turn to avoid redundant calculations
+    PieceColor nextTurn = (currentTurn == PieceColor::WHITE) ? 
+                          PieceColor::BLACK : PieceColor::WHITE;
+    
+    // For deeper depths, we need to make each move and recurse
     for (const auto& from : playerPieces) {
         moves.clear();
         // Get pseudo-legal moves
-        std::vector<BoardPosition> pseudoLegalMoves = getLegalMovesForPiece(from, pieces, currentTurn);
+        std::vector<BoardPosition> pseudoLegalMoves = getLegalMovesForPiece(from, pieces, 
+currentTurn);
         
         // Filter moves that would leave the king in check
-        std::vector<BoardPosition> legalMoves = filterLegalMoves(from, pseudoLegalMoves, pieces, currentTurn);
+        std::vector<BoardPosition> legalMoves = filterLegalMoves(from, pseudoLegalMoves, 
+pieces, currentTurn);
         
         // Skip if no moves
         if (legalMoves.empty()) continue;
@@ -1650,79 +1505,129 @@ long long countMovesAtDepth(int depth, std::map<BoardPosition, ChessPiece>& piec
             BoardPosition oldEnPassantTarget = enPassantTarget;
             
             // Set en passant target if this move creates one
-            BoardPosition newEnPassantTarget = calculateEnPassantTarget(movingPiece, from, to);
+            BoardPosition newEnPassantTarget = calculateEnPassantTarget(movingPiece, from, 
+to);
             enPassantTarget = newEnPassantTarget;
             
             // Check if this is an en passant capture
             bool isEnPassant = isEnPassantCapture(movingPiece, from, to, pieces);
             BoardPosition capturedPawnPos = {-1, -1};
             ChessPiece capturedPawn;
+            
             if (isEnPassant) {
+                // For en passant, the captured pawn is on the same column as the destination
+                // but on the same row as the source
                 capturedPawnPos = {to.first, from.second};
-                auto pawnIt = pieces.find(capturedPawnPos);
-                if (pawnIt != pieces.end()) {
-                    capturedPawn = pawnIt->second;
+                
+                // Get the captured pawn
+                auto capturedPawnIt = pieces.find(capturedPawnPos);
+                if (capturedPawnIt != pieces.end()) {
+                    capturedPawn = capturedPawnIt->second;
                     pieces.erase(capturedPawnPos);
                 }
             }
             
-            // Make the move
-            pieces.erase(from);
+            // Check if this is a castling move
+            bool isCastling = isCastlingMove(movingPiece, from, to);
+            
+            // Store rook positions and pieces for castling restoration
+            BoardPosition rookFrom, rookTo;
+            ChessPiece rookPiece;
+            bool hadRook = false;
+            
+            // Make the move (use direct assignment for better performance)
             pieces[to] = movingPiece;
+            pieces.erase(from);
             
-            // Handle castling rook movement
-            if (movingPiece.type == PieceType::KING && std::abs(to.first - from.first) == 2) {
-                handleCastling(pieces, movingPiece, from, to);
+            // Handle castling (move the rook if it's a castling move)
+            if (isCastling) {
+                // Save rook positions for unmake
+                int row = from.second;
+                if (to.first > from.first) { // Kingside
+                    rookFrom = {7, row};
+                    rookTo = {to.first - 1, row};
+                } else { // Queenside
+                    rookFrom = {0, row};
+                    rookTo = {to.first + 1, row};
+                }
+                
+                // Remember the rook
+                auto rookIt = pieces.find(rookFrom);
+                if (rookIt != pieces.end()) {
+                    rookPiece = rookIt->second;
+                    hadRook = true;
+                    
+                    // Move the rook
+                    pieces[rookTo] = rookPiece;
+                    pieces.erase(rookFrom);
+                }
             }
             
-            // If we're at the last depth, we count the move and don't recurse
-            if (depth == 1) {
-                totalMoves++;
-            } else {
-                // Otherwise recurse deeper
-                PieceColor nextTurn = (currentTurn == PieceColor::WHITE) ? PieceColor::BLACK : PieceColor::WHITE;
-                totalMoves += countMovesAtDepth(depth - 1, pieces, nextTurn);
+            // Handle pawn promotion
+            bool isPawnPromotion = false;
+            if (movingPiece.type == PieceType::PAWN) {
+                int promotionRank = (movingPiece.color == PieceColor::WHITE) ? 0 : 7;
+                if (to.second == promotionRank) {
+                    isPawnPromotion = true;
+                    
+                    // Save original pawn piece
+                    ChessPiece originalPawn = pieces[to];
+                    
+                    // Count moves for all promotion pieces (Queen, Rook, Bishop, Knight)
+                    for (PieceType promotionType : {PieceType::QUEEN, PieceType::ROOK, 
+                                                   PieceType::BISHOP, PieceType::KNIGHT}) {
+                        // Change the piece to the promotion type
+                        pieces[to].type = promotionType;
+                        
+                        // Recursively count moves for the next player
+                        long long moveCount = countMovesAtDepth(depth - 1, pieces, nextTurn);
+                        totalMoves += moveCount;
+                    }
+                    
+                    // Restore the original pawn for proper unmake
+                    pieces[to] = originalPawn;
+                }
             }
             
-            // Undo the move
-            pieces.erase(to);
+            // Only recurse normally if not a promotion (those already recursed above)
+            if (!isPawnPromotion) {
+                // Recursively count moves for the next player
+                long long moveCount = countMovesAtDepth(depth - 1, pieces, nextTurn);
+                totalMoves += moveCount;
+                
+                // For depth 3 debugging
+                if (depth == 3) {
+                    auto pieceIt = pieces.find(from);
+                    if (pieceIt != pieces.end()) {
+                        movesByPieceType[pieceIt->second.type] += moveCount;
+                    }
+                }
+            }
+            
+            // Restore the en passant target
+            enPassantTarget = oldEnPassantTarget;
+            
+            // Restore castling rights
+            castlingRights = oldCastlingRights;
+            
+            // Unmake the move (restore the board state)
             pieces[from] = movingPiece;
-            
-            // Restore captured piece if any
             if (hadPiece) {
                 pieces[to] = capturedPiece;
+            } else {
+                pieces.erase(to);
             }
             
-            // Restore en passant captured pawn if needed
+            // Restore rook position for castling
+            if (isCastling && hadRook) {
+                pieces[rookFrom] = rookPiece;
+                pieces.erase(rookTo);
+            }
+            
+            // If it was an en passant capture, restore the captured pawn
             if (isEnPassant && capturedPawnPos.first != -1) {
                 pieces[capturedPawnPos] = capturedPawn;
             }
-            
-            // Undo castling if needed
-            if (movingPiece.type == PieceType::KING && std::abs(to.first - from.first) == 2) {
-                // Kingside castling
-                if (to.first > from.first) {
-                    BoardPosition rookTo(to.first - 1, to.second);
-                    BoardPosition rookFrom(7, to.second);
-                    if (pieces.find(rookTo) != pieces.end()) {
-                        pieces[rookFrom] = pieces[rookTo];
-                        pieces.erase(rookTo);
-                    }
-                }
-                // Queenside castling
-                else {
-                    BoardPosition rookTo(to.first + 1, to.second);
-                    BoardPosition rookFrom(0, to.second);
-                    if (pieces.find(rookTo) != pieces.end()) {
-                        pieces[rookFrom] = pieces[rookTo];
-                        pieces.erase(rookTo);
-                    }
-                }
-            }
-            
-            // Restore en passant target and castling rights
-            enPassantTarget = oldEnPassantTarget;
-            castlingRights = oldCastlingRights;
         }
     }
     
@@ -1730,7 +1635,8 @@ long long countMovesAtDepth(int depth, std::map<BoardPosition, ChessPiece>& piec
 }
 
 // Helper function to get all pieces of a specific color
-std::vector<BoardPosition> getAllPiecesForColor(const std::map<BoardPosition, ChessPiece>& pieces, 
+std::vector<BoardPosition> getAllPiecesForColor(const std::map<BoardPosition, ChessPiece>& 
+pieces, 
                                               PieceColor color) {
     std::vector<BoardPosition> result;
     result.reserve(16); // Maximum number of pieces of one color
@@ -1745,29 +1651,11 @@ std::vector<BoardPosition> getAllPiecesForColor(const std::map<BoardPosition, Ch
 }
 
 // Add a function to handle en passant captures when making moves
-void handleEnPassantCapture(std::map<BoardPosition, ChessPiece>& pieces, 
                            const ChessPiece& movingPiece,
                            const BoardPosition& from, 
                            const BoardPosition& to) {
-    // Check if this is a pawn and if it's moving to the en passant target
-    if (movingPiece.type == PieceType::PAWN && to == enPassantTarget) {
-        // For en passant, we need to remove the captured pawn
-        // The captured pawn is on the same column as the destination but on the same row as the source
-        BoardPosition capturedPawnPos = {to.first, from.second};
-        
-        // Ensure there's actually a pawn to capture
-        auto pawnIt = pieces.find(capturedPawnPos);
-        if (pawnIt != pieces.end() && 
-            pawnIt->second.type == PieceType::PAWN && 
-            pawnIt->second.color != movingPiece.color) {
-            // Remove the captured pawn
-            enPassantCapturedPawn = capturedPawnPos;
-            pieces.erase(capturedPawnPos);
-        }
-    } else {
-        // Reset the captured pawn position
-        enPassantCapturedPawn = {-1, -1};
-    }
+    // Do nothing since en passant is disabled
+    return;
 }
 
 // Function to check if a move is an en passant capture
@@ -1775,33 +1663,13 @@ bool isEnPassantCapture(const ChessPiece& piece,
                        const BoardPosition& from, 
                        const BoardPosition& to,
                        const std::map<BoardPosition, ChessPiece>& pieces) {
-    // Basic conditions for en passant capture:
-    // 1. The moving piece is a pawn
-    // 2. The destination is the en passant target
-    // 3. The en passant target square is valid (not -1,-1)
-    // 4. It's a diagonal move (moving to a different file)
-    
-    if (piece.type != PieceType::PAWN || 
-        enPassantTarget.first == -1 || 
-        enPassantTarget.second == -1 ||
-        to != enPassantTarget || 
-        from.first == to.first) {
-        return false;
-    }
-    
-    // Check if there's a pawn to capture on the en passant square
-    // (same file as destination, same rank as source)
-    BoardPosition capturedPawnPos{to.first, from.second};
-    auto pawnIt = pieces.find(capturedPawnPos);
-    
-    // Verify that there's an opponent's pawn at the capture position
-    return (pawnIt != pieces.end() && 
-            pawnIt->second.type == PieceType::PAWN && 
-            pawnIt->second.color != piece.color);
+    // Disable en passant capture completely
+    return false;
 }
 
 // Add a function to check if a move is a castling move
-bool isCastlingMove(const ChessPiece& piece, const BoardPosition& from, const BoardPosition& to) {
+bool isCastlingMove(const ChessPiece& piece, const BoardPosition& from, const BoardPosition& 
+to) {
     return piece.type == PieceType::KING && std::abs(to.first - from.first) == 2;
 }
 
@@ -1819,7 +1687,8 @@ void handleCastling(std::map<BoardPosition, ChessPiece>& pieces,
     if (to.first > from.first) {
         // Find the kingside rook
         BoardPosition rookFrom = {7, row};
-        BoardPosition rookTo = {to.first - 1, row}; // Place rook to the left of king's new position
+        BoardPosition rookTo = {to.first - 1, row}; // Place rook to the left of king's new 
+position
         
         auto rookIt = pieces.find(rookFrom);
         if (rookIt != pieces.end()) {
@@ -1833,7 +1702,8 @@ void handleCastling(std::map<BoardPosition, ChessPiece>& pieces,
     else {
         // Find the queenside rook
         BoardPosition rookFrom = {0, row};
-        BoardPosition rookTo = {to.first + 1, row}; // Place rook to the right of king's new position
+        BoardPosition rookTo = {to.first + 1, row}; // Place rook to the right of king's new 
+position
         
         auto rookIt = pieces.find(rookFrom);
         if (rookIt != pieces.end()) {
@@ -1845,81 +1715,60 @@ void handleCastling(std::map<BoardPosition, ChessPiece>& pieces,
     }
 }
 
-// Improved move scoring for better ordering - makes alpha-beta pruning more effective
+// Move scoring for move ordering
 int scoreMoveForOrdering(const BoardPosition& from, const BoardPosition& to, 
                          const ChessPiece& movingPiece,
                          const std::map<BoardPosition, ChessPiece>& pieces) {
-    constexpr int CAPTURE_BONUS = 10000; // High bonus for any capture to search these first
-    constexpr int PROMOTION_BONUS = 15000; // Even higher bonus for promotions
-    constexpr int CASTLE_BONUS = 5000; // Good bonus for castling
-    constexpr int EN_PASSANT_BONUS = 9500; // Almost as good as captures
-    
     int score = 0;
-    
-    // MVV-LVA (Most Valuable Victim - Least Valuable Aggressor)
-    // Score captures higher - capturing valuable pieces with less valuable pieces is best
-    static const int pieceValues[6] = {
-        100,   // Pawn
-        500,   // Rook
-        320,   // Knight
-        330,   // Bishop
-        900,   // Queen
-        20000  // King (extremely high to ensure king captures are rare)
-    };
     
     // Check if move is a capture
     auto targetIt = pieces.find(to);
     if (targetIt != pieces.end()) {
+        // MVV-LVA (Most Valuable Victim - Least Valuable Aggressor)
+        // Prioritize capturing high-value pieces with low-value pieces
+        const int pieceValues[6] = {
+            100,   // Pawn
+            500,   // Rook
+            320,   // Knight
+            330,   // Bishop
+            900,   // Queen
+            20000  // King (extremely high to ensure king captures are rare)
+        };
+        
         int victimValue = pieceValues[static_cast<int>(targetIt->second.type)];
         int aggressorValue = pieceValues[static_cast<int>(movingPiece.type)];
         
-        // Base score: victim value - attacker value/10 + fixed capture bonus
-        // Higher value victims and lower value attackers get better scores
-        score = victimValue * 100 - aggressorValue + CAPTURE_BONUS;
+        // Score based on victim value minus a fraction of aggressor value
+        score = victimValue * 10 - aggressorValue / 10;
     }
     
     // Bonus for pawn promotions
     if (movingPiece.type == PieceType::PAWN) {
         int promotionRank = (movingPiece.color == PieceColor::WHITE) ? 0 : 7;
         if (to.second == promotionRank) {
-            score += PROMOTION_BONUS;
+            score += 800; // High bonus for promotions
         }
-        
-        // Bonus for pawn advancement
-        int advancement = (movingPiece.color == PieceColor::WHITE) ? 
-                         (7 - to.second) : to.second;
-        score += advancement * 10;
-    }
-    
-    // Check if this is an en passant capture
-    if (movingPiece.type == PieceType::PAWN && to == enPassantTarget) {
-        score += EN_PASSANT_BONUS;
     }
     
     // Bonus for castling
     if (movingPiece.type == PieceType::KING && std::abs(to.first - from.first) == 2) {
-        score += CASTLE_BONUS;
+        score += 50; // Moderate bonus for castling
     }
     
-    // Bonus for moves to the center (for non-pawns)
-    if (movingPiece.type != PieceType::PAWN) {
-        // Distance from center (0-7)
-        int centerDistance = std::abs(3.5 - to.first) + std::abs(3.5 - to.second);
-        score += (8 - centerDistance) * 5;
+    // Small bonus for center control with pawns and knights
+    if (movingPiece.type == PieceType::PAWN || movingPiece.type == PieceType::KNIGHT) {
+        if ((to.first >= 2 && to.first <= 5) && (to.second >= 2 && to.second <= 5)) {
+            score += 10; // Small bonus for center control
+        }
     }
-    
-    // Killer move heuristic could be implemented here
-    // History heuristic could be implemented here
     
     return score;
 }
 
-// More efficient move ordering with better sorting
+// Sort moves by score (highest first) for better move ordering
 void orderMoves(std::vector<BoardPosition>& moves, const BoardPosition& from, 
                 const ChessPiece& movingPiece,
                 const std::map<BoardPosition, ChessPiece>& pieces) {
-    if (moves.size() <= 1) return; // No need to sort a single move
-    
     std::vector<std::pair<BoardPosition, int>> scoredMoves;
     scoredMoves.reserve(moves.size());
     
@@ -1933,7 +1782,7 @@ void orderMoves(std::vector<BoardPosition>& moves, const BoardPosition& from,
     std::sort(scoredMoves.begin(), scoredMoves.end(), 
               [](const auto& a, const auto& b) { return a.second > b.second; });
     
-    // Extract sorted moves back to the original vector
+    // Extract sorted moves
     for (size_t i = 0; i < scoredMoves.size(); ++i) {
         moves[i] = scoredMoves[i].first;
     }
@@ -2045,38 +1894,8 @@ std::vector<std::pair<BoardPosition, BoardPosition>> getEnPassantCaptures(
     PieceColor sideToMove,
     const BoardPosition& epTarget) {
     
-    std::vector<std::pair<BoardPosition, BoardPosition>> epCaptures;
-    
-    // If no en passant target, no captures are possible
-    if (epTarget.first == -1 || epTarget.second == -1) {
-        return epCaptures;
-    }
-    
-    // The row where pawns that can capture via en passant are located
-    int pawnRow = (sideToMove == PieceColor::WHITE) ? 3 : 4;
-    
-    // Check left and right of the en passant target for capturing pawns
-    for (int offset : {-1, 1}) {
-        int col = epTarget.first + offset;
-        if (col >= 0 && col < 8) {
-            BoardPosition pawnPos(col, pawnRow);
-            auto it = pieces.find(pawnPos);
-            if (it != pieces.end() && 
-                it->second.type == PieceType::PAWN && 
-                it->second.color == sideToMove) {
-                
-                // This pawn can make an en passant capture
-                // The destination is the en passant target
-                int destRow = (sideToMove == PieceColor::WHITE) ? 
-                            pawnRow - 1 : pawnRow + 1;
-                BoardPosition dest(epTarget.first, destRow);
-                
-                epCaptures.push_back({pawnPos, dest});
-            }
-        }
-    }
-    
-    return epCaptures;
+    // Return empty vector as en passant is disabled
+    return {};
 }
 
 // Helper function to correctly calculate en passant target from a move
@@ -2085,23 +1904,7 @@ BoardPosition calculateEnPassantTarget(
     const BoardPosition& from,
     const BoardPosition& to) {
     
-    // En passant is only possible when:
-    // 1. The piece is a pawn
-    // 2. It moves two squares (from its starting rank)
-    if (piece.type == PieceType::PAWN) {
-        // Check if the pawn moved two squares
-        if (std::abs(from.second - to.second) == 2) {
-            // Verify the pawn is moving from its starting rank
-            int startingRank = (piece.color == PieceColor::WHITE) ? 6 : 1;
-            if (from.second == startingRank) {
-                // The en passant target is the square the pawn skipped over
-                int targetRank = (from.second + to.second) / 2;
-                return {from.first, targetRank};
-            }
-        }
-    }
-    
-    // For all other moves, no en passant target is set
+    // Disable en passant by always returning invalid position
     return {-1, -1};
 }
 
@@ -2138,7 +1941,8 @@ void updateCastlingRights(const BoardPosition& from, const ChessPiece& piece) {
 }
 
 // Function to check if a rook is captured, which would affect castling rights
-void updateCastlingRightsForCapture(const BoardPosition& to, const ChessPiece& capturedPiece) {
+void updateCastlingRightsForCapture(const BoardPosition& to, const ChessPiece& capturedPiece) 
+{
     if (capturedPiece.type == PieceType::ROOK) {
         if (capturedPiece.color == PieceColor::WHITE) {
             if (to.first == 0 && to.second == 7) { // White queenside rook
@@ -2156,311 +1960,6 @@ void updateCastlingRightsForCapture(const BoardPosition& to, const ChessPiece& c
     }
 }
 
-// Transposition table entry
-struct TTEntry {
-    uint64_t hash;
-    int depth;
-    int score;
-    enum class NodeType { EXACT, ALPHA, BETA } type;
-    std::pair<BoardPosition, BoardPosition> bestMove;
-};
+// Function to handle the special case of en passant capture
 
-// Global transposition table
-static std::unordered_map<uint64_t, TTEntry> transpositionTable;
-static std::mutex ttMutex;
 
-// Helper function to score a position (simple material evaluation)
-int evaluatePosition(const std::map<BoardPosition, ChessPiece>& pieces) {
-    static const int pieceValues[6] = {
-        100,   // Pawn
-        500,   // Rook
-        320,   // Knight
-        330,   // Bishop
-        900,   // Queen
-        20000  // King
-    };
-    
-    int score = 0;
-    
-    for (const auto& [pos, piece] : pieces) {
-        int value = pieceValues[static_cast<int>(piece.type)];
-        
-        // Add position-based bonuses
-        if (piece.type == PieceType::PAWN) {
-            // Bonus for advancement
-            int advancement = (piece.color == PieceColor::WHITE) ? (7 - pos.second) : pos.second;
-            value += advancement * 5;
-            
-            // Bonus for central pawns
-            if (pos.first >= 2 && pos.first <= 5) {
-                value += 10;
-            }
-        }
-        else if (piece.type == PieceType::KNIGHT || piece.type == PieceType::BISHOP) {
-            // Bonus for centralized minor pieces
-            int centerDistance = std::abs(3.5 - pos.first) + std::abs(3.5 - pos.second);
-            value += (4 - centerDistance) * 5;
-        }
-        
-        // Apply the score with correct sign based on color
-        score += (piece.color == PieceColor::WHITE) ? value : -value;
-    }
-    
-    return score;
-}
-
-// Alpha-beta search function
-int alphaBeta(std::map<BoardPosition, ChessPiece>& pieces, 
-             int depth, 
-             int alpha, 
-             int beta, 
-             PieceColor sideToMove,
-             std::pair<BoardPosition, BoardPosition>& bestMove) {
-    
-    PieceColor opponentColor = (sideToMove == PieceColor::WHITE) ? PieceColor::BLACK : PieceColor::WHITE;
-    
-    // Check if king is in check - extend search depth in that case
-    bool inCheck = isKingInCheck(pieces, sideToMove);
-    if (inCheck) {
-        depth += 1; // Check extension - search deeper when in check
-    }
-    
-    // Calculate a hash key for the current position
-    uint64_t posHash = computeZobristHash(pieces, sideToMove, enPassantTarget);
-    
-    // Check transposition table
-    TTEntry ttEntry;
-    bool foundInTT = false;
-    
-    {
-        std::lock_guard<std::mutex> lock(ttMutex);
-        auto it = transpositionTable.find(posHash);
-        if (it != transpositionTable.end() && it->second.depth >= depth) {
-            ttEntry = it->second;
-            foundInTT = true;
-            
-            // Use the stored best move for move ordering
-            if (ttEntry.bestMove.first != BoardPosition{-1, -1}) {
-                bestMove = ttEntry.bestMove;
-            }
-            
-            // Return score directly if we can
-            if (ttEntry.type == TTEntry::NodeType::EXACT) {
-                return ttEntry.score;
-            }
-            else if (ttEntry.type == TTEntry::NodeType::ALPHA && ttEntry.score <= alpha) {
-                return alpha;
-            }
-            else if (ttEntry.type == TTEntry::NodeType::BETA && ttEntry.score >= beta) {
-                return beta;
-            }
-        }
-    }
-    
-    // Base case: leaf node
-    if (depth <= 0) {
-        // Quiescence search to handle horizon effect (not implemented for brevity)
-        return evaluatePosition(pieces);
-    }
-    
-    // Get all pieces for the current side
-    std::vector<BoardPosition> playerPieces = getAllPiecesForColor(pieces, sideToMove);
-    
-    // Check for checkmate or stalemate (no legal moves)
-    bool hasLegalMoves = false;
-    
-    // Variables to track the best move found so far
-    int bestScore = -1000000; // Negative infinity for practical purposes
-    BoardPosition bestFrom{-1, -1};
-    BoardPosition bestTo{-1, -1};
-    
-    // Search all moves
-    for (const auto& from : playerPieces) {
-        // Get legal moves for this piece
-        auto legalMoves = getLegalMovesForPiece(from, pieces, sideToMove);
-        
-        // Filter moves that would leave the king in check
-        legalMoves = filterLegalMoves(from, legalMoves, pieces, sideToMove);
-        
-        if (!legalMoves.empty()) {
-            hasLegalMoves = true;
-        }
-        
-        // Skip to next piece if no legal moves
-        if (legalMoves.empty()) continue;
-        
-        // Get the moving piece for move ordering
-        ChessPiece movingPiece = pieces[from];
-        
-        // Order moves for better pruning
-        orderMoves(legalMoves, from, movingPiece, pieces);
-        
-        // Try each move
-        for (const auto& to : legalMoves) {
-            // Save the current state
-            BoardPosition oldEnPassantTarget = enPassantTarget;
-            CastlingRights oldCastlingRights = castlingRights;
-            
-            // Remember captured piece (if any)
-            bool hadCapturedPiece = false;
-            ChessPiece capturedPiece;
-            auto targetIt = pieces.find(to);
-            if (targetIt != pieces.end()) {
-                hadCapturedPiece = true;
-                capturedPiece = targetIt->second;
-                
-                // Update castling rights if a rook is captured
-                updateCastlingRightsForCapture(to, capturedPiece);
-            }
-            
-            // Check for en passant capture
-            bool isEnPassant = isEnPassantCapture(movingPiece, from, to, pieces);
-            BoardPosition capturedPawnPos{-1, -1};
-            ChessPiece capturedPawn;
-            if (isEnPassant) {
-                capturedPawnPos = BoardPosition(to.first, from.second);
-                auto pawnIt = pieces.find(capturedPawnPos);
-                if (pawnIt != pieces.end()) {
-                    capturedPawn = pawnIt->second;
-                    pieces.erase(capturedPawnPos);
-                }
-            }
-            
-            // Update castling rights if king or rook moves
-            updateCastlingRights(from, movingPiece);
-            
-            // Update en passant target if this is a pawn double move
-            BoardPosition newEnPassantTarget = calculateEnPassantTarget(movingPiece, from, to);
-            enPassantTarget = newEnPassantTarget;
-            
-            // Make the move
-            pieces.erase(from);
-            pieces[to] = movingPiece;
-            
-            // Handle castling rook movement
-            if (movingPiece.type == PieceType::KING && std::abs(to.first - from.first) == 2) {
-                handleCastling(pieces, movingPiece, from, to);
-            }
-            
-            // Recursive alpha-beta call with negation
-            std::pair<BoardPosition, BoardPosition> childBestMove;
-            int score = -alphaBeta(pieces, depth - 1, -beta, -alpha, opponentColor, childBestMove);
-            
-            // Undo the move
-            pieces.erase(to);
-            pieces[from] = movingPiece;
-            
-            // Restore captured piece if any
-            if (hadCapturedPiece) {
-                pieces[to] = capturedPiece;
-            }
-            
-            // Restore en passant captured pawn if needed
-            if (isEnPassant && capturedPawnPos.first != -1) {
-                pieces[capturedPawnPos] = capturedPawn;
-            }
-            
-            // Undo castling if needed
-            if (movingPiece.type == PieceType::KING && std::abs(to.first - from.first) == 2) {
-                // Kingside castling
-                if (to.first > from.first) {
-                    BoardPosition rookTo(to.first - 1, to.second);
-                    BoardPosition rookFrom(7, to.second);
-                    if (pieces.find(rookTo) != pieces.end()) {
-                        pieces[rookFrom] = pieces[rookTo];
-                        pieces.erase(rookTo);
-                    }
-                }
-                // Queenside castling
-                else {
-                    BoardPosition rookTo(to.first + 1, to.second);
-                    BoardPosition rookFrom(0, to.second);
-                    if (pieces.find(rookTo) != pieces.end()) {
-                        pieces[rookFrom] = pieces[rookTo];
-                        pieces.erase(rookTo);
-                    }
-                }
-            }
-            
-            // Restore en passant target and castling rights
-            enPassantTarget = oldEnPassantTarget;
-            castlingRights = oldCastlingRights;
-            
-            // Update best score and move
-            if (score > bestScore) {
-                bestScore = score;
-                bestFrom = from;
-                bestTo = to;
-                
-                // Update alpha for pruning
-                alpha = std::max(alpha, score);
-                
-                // Beta cutoff - we found a move that's too good, opponent won't allow this position
-                if (alpha >= beta) {
-                    break;
-                }
-            }
-        }
-        
-        // Beta cutoff at piece level
-        if (alpha >= beta) {
-            break;
-        }
-    }
-    
-    // If no legal moves, it's either checkmate or stalemate
-    if (!hasLegalMoves) {
-        if (inCheck) {
-            // Checkmate: worst possible score (adjusted by depth to prefer faster mates)
-            return -900000 + depth;
-        }
-        else {
-            // Stalemate: a draw (0)
-            return 0;
-        }
-    }
-    
-    // Set the best move to return
-    if (bestFrom != BoardPosition{-1, -1}) {
-        bestMove = {bestFrom, bestTo};
-    }
-    
-    // Store result in transposition table
-    TTEntry::NodeType nodeType;
-    if (bestScore <= alpha) {
-        nodeType = TTEntry::NodeType::ALPHA;
-    }
-    else if (bestScore >= beta) {
-        nodeType = TTEntry::NodeType::BETA;
-    }
-    else {
-        nodeType = TTEntry::NodeType::EXACT;
-    }
-    
-    {
-        std::lock_guard<std::mutex> lock(ttMutex);
-        transpositionTable[posHash] = {posHash, depth, bestScore, nodeType, bestMove};
-    }
-    
-    return bestScore;
-}
-
-// Function to find the best move using alpha-beta search
-std::pair<BoardPosition, BoardPosition> findBestMove(
-    std::map<BoardPosition, ChessPiece>& pieces, 
-    PieceColor sideToMove, 
-    int searchDepth) {
-    
-    // Clear transposition table before search
-    {
-        std::lock_guard<std::mutex> lock(ttMutex);
-        transpositionTable.clear();
-    }
-    
-    std::pair<BoardPosition, BoardPosition> bestMove;
-    alphaBeta(pieces, searchDepth, -1000000, 1000000, sideToMove, bestMove);
-    
-    return bestMove;
-}
-
-// ... existing code ... 

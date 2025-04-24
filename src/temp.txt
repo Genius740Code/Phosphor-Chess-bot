@@ -1,0 +1,1 @@
+void handleEnPassantCapture(std::map<BoardPosition, ChessPiece>& pieces, const ChessPiece& movingPiece, const BoardPosition& from, const BoardPosition& to) { return; }

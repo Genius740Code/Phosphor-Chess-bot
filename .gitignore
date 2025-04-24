@@ -4,6 +4,9 @@
 *.o
 *.obj
 
+
+*.vVSCodeCounter
+*.code
 # Precompiled Headers
 *.gch
 *.pch

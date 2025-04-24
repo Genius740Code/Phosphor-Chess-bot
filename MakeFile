@@ -13,7 +13,7 @@ DEBUG_FLAGS = -g -DDEBUG -O0
 
 # Source files and objects
 SRCDIR = src
-SRCS = $(wildcard $(SRCDIR)/*.cpp)
+SRCS = $(filter-out $(SRCDIR)/search_clean.cpp, $(wildcard $(SRCDIR)/*.cpp))
 OBJS = $(patsubst $(SRCDIR)/%.cpp,%.o,$(SRCS))
 EXECUTABLE = main
 
@@ -75,10 +75,3 @@ git-checkpoint:
 	git add .
 	git commit -m "Workspace saved"
 	@echo "Workspace saved successfully!"
-
-
-# # Make sure you're on the free-movmentv2 branch
-#git checkout free-movmentv2
-
-# Reset to the first commit of this branch
-#git reset --hard $(git rev-list --max-parents=0 HEAD)

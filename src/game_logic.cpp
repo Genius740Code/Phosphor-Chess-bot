@@ -1235,3 +1235,126 @@ bool ChessGameLogic::canCastleQueenside(PieceColor color) const {
 // void ChessGameLogic::clearCache() {
 //     attackedSquareCache.clear();
 // }
+
+// Execute a move on the board
+void ChessGameLogic::executeMove(const BoardPosition& from, const BoardPosition& to) {
+    // Clear the attacked square cache
+    clearCache();
+    
+    // Get the moving piece
+    auto pieceIt = pieces.find(from);
+    if (pieceIt == pieces.end()) return; // No piece at the source square
+    
+    ChessPiece movingPiece = pieceIt->second;
+    bool isCapture = false;
+    
+    // Check if this is a capture move (destination has an opponent's piece)
+    auto targetIt = pieces.find(to);
+    if (targetIt != pieces.end()) {
+        isCapture = true;
+    }
+    
+    // Check for en passant capture
+    bool isEnPassantCapture = false;
+    BoardPosition capturedPawnPos = {-1, -1};
+    
+    if (movingPiece.type == PieceType::PAWN && enPassantAvailable && to == enPassantTarget) {
+        isEnPassantCapture = true;
+        isCapture = true;
+        // The captured pawn is on the same file as the destination but on the same rank as the source
+        capturedPawnPos = {to.first, from.second};
+    }
+    
+    // Update the halfmove clock (reset on pawn move or capture)
+    if (movingPiece.type == PieceType::PAWN || isCapture) {
+        halfMoveClock = 0;
+    } else {
+        halfMoveClock++;
+    }
+    
+    // Update fullmove counter (increments after Black's move)
+    if (currentTurn == PieceColor::BLACK) {
+        fullMoveCounter++;
+    }
+    
+    // Set the en passant target square if this is a double pawn move
+    if (movingPiece.type == PieceType::PAWN && std::abs(to.second - from.second) == 2) {
+        enPassantTarget = {to.first, (from.second + to.second) / 2};
+        enPassantAvailable = true;
+    } else {
+        enPassantTarget = {-1, -1};
+        enPassantAvailable = false;
+    }
+    
+    // Execute the move
+    pieces.erase(from);
+    
+    // Remove captured piece
+    if (isEnPassantCapture) {
+        pieces.erase(capturedPawnPos);
+    } else if (isCapture) {
+        // Normal capture - the target piece will be replaced with the moving piece
+    }
+    
+    // Place the moving piece in its new position
+    pieces[to] = movingPiece;
+    
+    // Handle castling (move the rook)
+    if (movingPiece.type == PieceType::KING && std::abs(to.first - from.first) == 2) {
+        int row = from.second;
+        BoardPosition rookFrom, rookTo;
+        
+        if (to.first > from.first) { // Kingside castling
+            rookFrom = {7, row};
+            rookTo = {to.first - 1, row}; // Place rook to the left of king's new position
+        } else { // Queenside castling
+            rookFrom = {0, row};
+            rookTo = {to.first + 1, row}; // Place rook to the right of king's new position
+        }
+        
+        // Move the rook
+        auto rookIt = pieces.find(rookFrom);
+        if (rookIt != pieces.end()) {
+            pieces[rookTo] = rookIt->second;
+            pieces.erase(rookFrom);
+        }
+    }
+    
+    // Update king positions if a king moved
+    if (movingPiece.type == PieceType::KING) {
+        if (movingPiece.color == PieceColor::WHITE) {
+            whiteKingPosition = to;
+        } else {
+            blackKingPosition = to;
+        }
+    }
+    
+    // Handle pawn promotion (in this implementation, promote to queen)
+    int promotionRank = (movingPiece.color == PieceColor::WHITE) ? 0 : 7;
+    if (movingPiece.type == PieceType::PAWN && to.second == promotionRank) {
+        pieces[to].type = PieceType::QUEEN;
+    }
+    
+    // Update game state
+    if (isKingInCheck(currentTurn == PieceColor::WHITE ? PieceColor::BLACK : PieceColor::WHITE)) {
+        gameState = GameState::CHECK;
+    } else {
+        gameState = GameState::ACTIVE;
+    }
+    
+    // Check for checkmate or stalemate
+    if (isCheckmate()) {
+        gameState = GameState::CHECKMATE;
+    } else if (isStalemate()) {
+        gameState = GameState::STALEMATE;
+    } else if (isDraw50MoveRule()) {
+        gameState = GameState::DRAW_FIFTY;
+    } else if (isDrawByRepetition()) {
+        gameState = GameState::DRAW_REPETITION;
+    } else if (isDrawByInsufficientMaterial()) {
+        gameState = GameState::DRAW_MATERIAL;
+    }
+    
+    // Update position history
+    positionHistory.push_back(getCurrentPositionFEN());
+}
