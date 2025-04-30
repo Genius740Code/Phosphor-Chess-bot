@@ -1750,7 +1750,7 @@ void handleEnPassantCapture(std::map<BoardPosition, ChessPiece>& pieces,
                            const BoardPosition& from, 
                            const BoardPosition& to) {
     // Check if this is a pawn and if it's moving to the en passant target
-    if (movingPiece.type == PieceType::PAWN && to == enPassantTarget) {
+    if (movingPiece.type == PieceType::PAWN && to == enPassantTarget && enPassantTarget.first != -1) {
         // For en passant, we need to remove the captured pawn
         // The captured pawn is on the same column as the destination but on the same row as the source
         BoardPosition capturedPawnPos = {to.first, from.second};

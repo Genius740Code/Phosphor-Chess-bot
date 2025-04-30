@@ -1,5 +1,4 @@
-﻿
-#include <iostream>
+﻿#include <iostream>
 #include <map>
 #include <string>
 #include <vector>
@@ -74,6 +73,7 @@ std::vector<std::pair<BoardPosition, BoardPosition>> getEnPassantCaptures(
     PieceColor sideToMove,
     const BoardPosition& epTarget);
 
+void handleEnPassantCapture(std::map<BoardPosition, ChessPiece>& pieces,
                            const ChessPiece& movingPiece,
                            const BoardPosition& from, 
                            const BoardPosition& to);
@@ -1651,11 +1651,29 @@ pieces,
 }
 
 // Add a function to handle en passant captures when making moves
+void handleEnPassantCapture(std::map<BoardPosition, ChessPiece>& pieces, 
                            const ChessPiece& movingPiece,
                            const BoardPosition& from, 
                            const BoardPosition& to) {
-    // Do nothing since en passant is disabled
-    return;
+    // Check if this is a pawn and if it's moving to the en passant target
+    if (movingPiece.type == PieceType::PAWN && to == enPassantTarget && enPassantTarget.first != -1) {
+        // For en passant, we need to remove the captured pawn
+        // The captured pawn is on the same column as the destination but on the same row as the source
+        BoardPosition capturedPawnPos = {to.first, from.second};
+        
+        // Ensure there's actually a pawn to capture
+        auto pawnIt = pieces.find(capturedPawnPos);
+        if (pawnIt != pieces.end() && 
+            pawnIt->second.type == PieceType::PAWN && 
+            pawnIt->second.color != movingPiece.color) {
+            // Remove the captured pawn
+            enPassantCapturedPawn = capturedPawnPos;
+            pieces.erase(capturedPawnPos);
+        }
+    } else {
+        // Reset the captured pawn position
+        enPassantCapturedPawn = {-1, -1};
+    }
 }
 
 // Function to check if a move is an en passant capture
@@ -1663,8 +1681,29 @@ bool isEnPassantCapture(const ChessPiece& piece,
                        const BoardPosition& from, 
                        const BoardPosition& to,
                        const std::map<BoardPosition, ChessPiece>& pieces) {
-    // Disable en passant capture completely
-    return false;
+    // Basic conditions for en passant capture:
+    // 1. The moving piece is a pawn
+    // 2. The destination is the en passant target
+    // 3. The en passant target square is valid (not -1,-1)
+    // 4. It's a diagonal move (moving to a different file)
+    
+    if (piece.type != PieceType::PAWN || 
+        enPassantTarget.first == -1 || 
+        enPassantTarget.second == -1 ||
+        to != enPassantTarget || 
+        from.first == to.first) {
+        return false;
+    }
+    
+    // Check if there's a pawn to capture on the en passant square
+    // (same file as destination, same rank as source)
+    BoardPosition capturedPawnPos{to.first, from.second};
+    auto pawnIt = pieces.find(capturedPawnPos);
+    
+    // Verify that there's an opponent's pawn at the capture position
+    return (pawnIt != pieces.end() && 
+            pawnIt->second.type == PieceType::PAWN && 
+            pawnIt->second.color != piece.color);
 }
 
 // Add a function to check if a move is a castling move
@@ -1894,8 +1933,37 @@ std::vector<std::pair<BoardPosition, BoardPosition>> getEnPassantCaptures(
     PieceColor sideToMove,
     const BoardPosition& epTarget) {
     
-    // Return empty vector as en passant is disabled
-    return {};
+    std::vector<std::pair<BoardPosition, BoardPosition>> captures;
+    
+    // If there's no en passant target, return empty vector
+    if (epTarget.first == -1 || epTarget.second == -1) {
+        return captures;
+    }
+    
+    // Get pawns of the side to move that could potentially capture en passant
+    // These would be at rank 4 for white or rank 3 for black, and on adjacent files
+    int pawnRow = (sideToMove == PieceColor::WHITE) ? 3 : 4;
+    
+    // Check pawns on adjacent files
+    for (int dfile = -1; dfile <= 1; dfile += 2) {
+        int col = epTarget.first + dfile;
+        
+        // Skip if out of bounds
+        if (col < 0 || col >= 8) continue;
+        
+        // Check if there's a pawn of the right color at this position
+        BoardPosition pawnPos(col, pawnRow);
+        auto it = pieces.find(pawnPos);
+        
+        if (it != pieces.end() && 
+            it->second.type == PieceType::PAWN && 
+            it->second.color == sideToMove) {
+            // Found a pawn that can potentially capture en passant
+            captures.push_back(std::make_pair(pawnPos, epTarget));
+        }
+    }
+    
+    return captures;
 }
 
 // Helper function to correctly calculate en passant target from a move
@@ -1904,7 +1972,23 @@ BoardPosition calculateEnPassantTarget(
     const BoardPosition& from,
     const BoardPosition& to) {
     
-    // Disable en passant by always returning invalid position
+    // En passant is only possible when:
+    // 1. The piece is a pawn
+    // 2. It moves two squares (from its starting rank)
+    if (piece.type == PieceType::PAWN) {
+        // Check if the pawn moved two squares
+        if (std::abs(from.second - to.second) == 2) {
+            // Verify the pawn is moving from its starting rank
+            int startingRank = (piece.color == PieceColor::WHITE) ? 6 : 1;
+            if (from.second == startingRank) {
+                // The en passant target is the square the pawn skipped over
+                int targetRank = (from.second + to.second) / 2;
+                return {from.first, targetRank};
+            }
+        }
+    }
+    
+    // For all other moves, no en passant target is set
     return {-1, -1};
 }
 
