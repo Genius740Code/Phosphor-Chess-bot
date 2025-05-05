@@ -36,6 +36,16 @@ x64/
 .vs/
 bin/
 obj/
+code/
+
+# Keep build/exe directory structure but ignore contents
+!build/
+!build/exe/
+build/exe/*
+
+# Keep dll directory structure but ignore contents
+!dll/
+dll/*
 
 # IDE files
 .vscode/

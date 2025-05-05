@@ -6,7 +6,7 @@ CXX = g++
 
 # Using local SFML libraries in the project folder
 CXXFLAGS = -Wall -Wextra -O3 -std=c++17 -I..
-LDFLAGS = -L.. -lsfml-graphics-2 -lsfml-window-2 -lsfml-system-2 -lgdi32 -luser32 -lgdiplus
+LDFLAGS = -L.. -lsfml-graphics-3 -lsfml-window-3 -lsfml-system-3 -lgdi32 -luser32 -lgdiplus
 
 # Source and build directories
 SRCDIR = ../src
@@ -78,4 +78,4 @@ run: all
 # Quick build (legacy)
 quick:
 	cd .. && call setup_sfml.bat
-	g++ -Wall -Wextra -O3 -std=c++17 -I.. ../main.cpp -o ../main.exe -L.. -lsfml-graphics-2 -lsfml-window-2 -lsfml-system-2 -lgdi32 -luser32 
+	g++ -Wall -Wextra -O3 -std=c++17 -I.. ../main.cpp -o ../main.exe -L.. -lsfml-graphics-3 -lsfml-window-3 -lsfml-system-3 -lgdi32 -luser32 

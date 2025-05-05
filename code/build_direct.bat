@@ -15,7 +15,7 @@ g++ -Wall -Wextra -O3 -std=c++17 -I. -c src/engine/TerrainGenerator.cpp -o obj/e
 g++ -Wall -Wextra -O3 -std=c++17 -I. -c src/main.cpp -o obj/main.o
 
 REM Link the final executable
-g++ -o main.exe obj/main.o obj/engine/PerlinNoise.o obj/engine/TextureManager.o obj/engine/TerrainGenerator.o -L. -lsfml-graphics-2 -lsfml-window-2 -lsfml-system-2 -lgdi32 -luser32 -lgdiplus
+g++ -o main.exe obj/main.o obj/engine/PerlinNoise.o obj/engine/TextureManager.o obj/engine/TerrainGenerator.o -L. -lsfml-graphics-3 -lsfml-window-3 -lsfml-system-3 -lgdi32 -luser32 -lgdiplus
 
 REM Check if build was successful
 if %ERRORLEVEL% EQU 0 (

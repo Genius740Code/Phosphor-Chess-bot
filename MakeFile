@@ -3,10 +3,10 @@
 # Compiler and flags
 CXX = g++
 CXXFLAGS = -Wall -Wextra -O3 -std=c++17 -Icode/include -march=native
-LDFLAGS = -Lcode/lib -lsfml-graphics -lsfml-window -lsfml-system -lopengl32 -lsfml-audio
+LDFLAGS = -L./dll -lsfml-graphics-2 -lsfml-window-2 -lsfml-system-2 -lopengl32 -lsfml-audio-2
 
 # Release-specific flags
-RELEASE_FLAGS = -DNDEBUG -fomit-frame-pointer -flto
+RELEASE_FLAGS = -DNDEBUG -fomit-frame-pointer
 
 # Debug-specific flags
 DEBUG_FLAGS = -g -DDEBUG -O0
