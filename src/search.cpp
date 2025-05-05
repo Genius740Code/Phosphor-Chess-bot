@@ -647,6 +647,29 @@ void calculateMovesForPosition(const std::string& fen) {
     std::cout << "Calculating moves for position: " << fen << std::endl;
     std::cout << "=================================" << std::endl;
     
+    // Get depth from user input
+    int maxDepth = 5;
+    std::cout << "Enter maximum depth to calculate (1-6 recommended): ";
+    std::cin >> maxDepth;
+    
+    // Validate input
+    if (maxDepth < 1) {
+        maxDepth = 1;
+        std::cout << "Using minimum depth of 1." << std::endl;
+    } else if (maxDepth > 8) {
+        std::cout << "Warning: Depths above 6 may take a very long time to compute." << std::endl;
+        std::cout << "Continue with depth " << maxDepth << "? (y/n): ";
+        char confirm;
+        std::cin >> confirm;
+        if (confirm != 'y' && confirm != 'Y') {
+            maxDepth = 6;
+            std::cout << "Using maximum recommended depth of 6." << std::endl;
+        }
+    }
+    
+    // Clear any remaining input in buffer
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    
     // Parse FEN string
     std::map<BoardPosition, ChessPiece> pieces;
     PieceColor sideToMove = PieceColor::WHITE;
@@ -737,8 +760,15 @@ void calculateMovesForPosition(const std::string& fen) {
     unsigned int numThreads = std::thread::hardware_concurrency();
     std::cout << "Running on " << numThreads << " hardware threads" << std::endl;
     
-    // Test different depths
-    for (int depth = 1; depth <= 5; ++depth) {
+    // Perform specialized debugging at a moderate depth
+    if (fen == "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") {
+        std::cout << "Performing specialized perft debugging at depth 3..." << std::endl;
+        
+        // ... existing code for specialized debugging ...
+    }
+    
+    // Test different depths up to user-selected max depth
+    for (int depth = 1; depth <= maxDepth; ++depth) {
         auto startTime = std::chrono::high_resolution_clock::now();
         
         // Reset castling rights for each run to ensure consistency
@@ -787,6 +817,29 @@ void calculateMovesForStartingPosition() {
     std::cout << "Calculating moves for position: " << fen << std::endl;
     std::cout << "=================================" << std::endl;
     
+    // Get depth from user input
+    int maxDepth = 5;
+    std::cout << "Enter maximum depth to calculate (1-6 recommended): ";
+    std::cin >> maxDepth;
+    
+    // Validate input
+    if (maxDepth < 1) {
+        maxDepth = 1;
+        std::cout << "Using minimum depth of 1." << std::endl;
+    } else if (maxDepth > 8) {
+        std::cout << "Warning: Depths above 6 may take a very long time to compute." << std::endl;
+        std::cout << "Continue with depth " << maxDepth << "? (y/n): ";
+        char confirm;
+        std::cin >> confirm;
+        if (confirm != 'y' && confirm != 'Y') {
+            maxDepth = 6;
+            std::cout << "Using maximum recommended depth of 6." << std::endl;
+        }
+    }
+    
+    // Clear any remaining input in buffer
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    
     // Parse FEN string
     std::map<BoardPosition, ChessPiece> pieces;
     PieceColor sideToMove = PieceColor::WHITE;
@@ -877,7 +930,7 @@ void calculateMovesForStartingPosition() {
     unsigned int numThreads = std::thread::hardware_concurrency();
     std::cout << "Running on " << numThreads << " hardware threads" << std::endl;
     
-    // Debug specialized perft test to find missing moves
+    // Perform specialized perft debugging at depth 3
     std::cout << "Performing specialized perft debugging at depth 3..." << std::endl;
     
     // Debug print the board position
@@ -1071,8 +1124,8 @@ void calculateMovesForStartingPosition() {
     std::cout << "--------------------------------" << std::endl;
     
     // Now run the standard perft test
-    // Test different depths
-    for (int depth = 1; depth <= 5; ++depth) {
+    // Test different depths up to user-selected max depth
+    for (int depth = 1; depth <= maxDepth; ++depth) {
         auto startTime = std::chrono::high_resolution_clock::now();
         
         // Reset castling rights for each run to ensure consistency
@@ -1111,7 +1164,7 @@ void calculateMovesForStartingPosition() {
         
         std::cout << std::endl;
 
-        if (depth == 5) {
+        if (depth == maxDepth) {
             std::cout << "\nCause of Perft Discrepancy Analysis:" << std::endl;
             std::cout << "-----------------------------------" << std::endl;
             std::cout << "The discrepancy in perft counts when compared to standard Stockfish is due to:" << std::endl;

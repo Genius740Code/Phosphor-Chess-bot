@@ -27,14 +27,38 @@ bool PieceTextureManager::loadTextures(float scaleFactor) {
     
     // Check if pieces directory exists
     std::filesystem::path piecesDir("./pieces");
+    // Try root directory first, then check in build/exe/pieces
     if (!std::filesystem::exists(piecesDir)) {
-        std::cerr << "Pieces directory not found. Creating it..." << std::endl;
-        try {
-            std::filesystem::create_directory(piecesDir);
-        } catch (const std::exception& e) {
-            std::cerr << "Failed to create pieces directory: " << e.what() << std::endl;
+        // Try alternative paths
+        std::vector<std::filesystem::path> altPaths = {
+            "../pieces",
+            "../../pieces",
+            "build/exe/pieces"
+        };
+        
+        bool foundDir = false;
+        for (const auto& path : altPaths) {
+            if (std::filesystem::exists(path)) {
+                piecesDir = path;
+                std::cout << "Found pieces directory at: " << path.string() << std::endl;
+                foundDir = true;
+                break;
+            }
         }
-        return false;
+        
+        if (!foundDir) {
+            std::cerr << "Pieces directory not found. Creating it..." << std::endl;
+            try {
+                std::filesystem::create_directory(piecesDir);
+                
+                std::cerr << "Pieces directory created at: " << std::filesystem::absolute(piecesDir) << std::endl;
+                std::cerr << "Please copy chess piece PNG images to this directory." << std::endl;
+                std::cerr << "Required files: white-pawn.png, white-rook.png, etc." << std::endl;
+            } catch (const std::exception& e) {
+                std::cerr << "Failed to create pieces directory: " << e.what() << std::endl;
+            }
+            return false;
+        }
     }
     
     // Piece filenames array for faster iteration
@@ -44,30 +68,70 @@ bool PieceTextureManager::loadTextures(float scaleFactor) {
     };
     
     bool allLoaded = true;
+    bool anyLoaded = false;
+    
+    // Create fallback textures for missing pieces
+    sf::Texture fallbackWhite;
+    sf::Texture fallbackBlack;
+    
+    // Create simple fallback textures (10x10 white/black squares)
+    sf::Image whiteImg;
+    sf::Image blackImg;
+    whiteImg.create(20, 20, sf::Color::White);
+    blackImg.create(20, 20, sf::Color::Black);
+    
+    // Add a simple border to fallback textures to make them visible on both square colors
+    for (unsigned int x = 0; x < 20; ++x) {
+        for (unsigned int y = 0; y < 20; ++y) {
+            if (x < 2 || x > 17 || y < 2 || y > 17) {
+                whiteImg.setPixel(x, y, sf::Color::Black);
+                blackImg.setPixel(x, y, sf::Color::White);
+            }
+        }
+    }
+    
+    fallbackWhite.loadFromImage(whiteImg);
+    fallbackBlack.loadFromImage(blackImg);
     
     // Load each texture
     for (const auto& piece : pieceNames) {
-        std::string filename = "./pieces/" + piece + ".png";
+        // Try multiple paths for each piece
+        std::vector<std::string> possiblePaths = {
+            piecesDir.string() + "/" + piece + ".png",
+            "./pieces/" + piece + ".png",
+            "../pieces/" + piece + ".png",
+            "../../pieces/" + piece + ".png",
+            "build/exe/pieces/" + piece + ".png"
+        };
         
-        // Verify file exists
-        if (!std::filesystem::exists(filename)) {
-            std::cerr << "Texture file not found: " << filename << std::endl;
-            allLoaded = false;
-            continue;
+        bool loaded = false;
+        for (const auto& filename : possiblePaths) {
+            if (std::filesystem::exists(filename)) {
+                sf::Texture texture;
+                if (texture.loadFromFile(filename)) {
+                    texture.setSmooth(true); // Enable smooth scaling
+                    textures[piece] = std::move(texture);
+                    loaded = true;
+                    anyLoaded = true;
+                    break;
+                }
+            }
         }
         
-        sf::Texture texture;
-        if (!texture.loadFromFile(filename)) {
-            std::cerr << "Failed to load texture: " << filename << std::endl;
+        if (!loaded) {
+            std::cerr << "Texture file not found for: " << piece << std::endl;
+            // Use fallback texture
+            if (piece.find("white") != std::string::npos) {
+                textures[piece] = fallbackWhite;
+            } else {
+                textures[piece] = fallbackBlack;
+            }
             allLoaded = false;
-            continue;
         }
-        
-        texture.setSmooth(true); // Enable smooth scaling
-        textures[piece] = std::move(texture);
     }
     
-    return allLoaded;
+    // If no pieces were loaded but we created fallbacks, we can still continue
+    return anyLoaded || !allLoaded;
 }
 
 // Fast lookup mapping of FEN characters to piece types - using unordered_map for better performance
