@@ -66,10 +66,6 @@ private:
     // Position history for threefold repetition detection
     std::vector<std::string> positionHistory;
     
-    // En passant target square
-    BoardPosition enPassantTarget;
-    bool enPassantAvailable;
-    
     // King positions
     BoardPosition whiteKingPosition;
     BoardPosition blackKingPosition;
@@ -144,8 +140,6 @@ public:
     // Special move helpers
     bool canCastleKingside(PieceColor color) const;
     bool canCastleQueenside(PieceColor color) const;
-    BoardPosition getEnPassantTarget() const { return enPassantTarget; }
-    bool isEnPassantAvailable() const { return enPassantAvailable; }
     
     // Game reset
     void resetGame();

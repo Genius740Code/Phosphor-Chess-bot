@@ -195,78 +195,72 @@ bool ChessInteraction::handleMouseClick(int x, int y) {
 }
 
 void ChessInteraction::movePiece(const BoardPosition& from, const BoardPosition& to) {
-    auto pieceIt = pieces.find(from);
-    if (pieceIt == pieces.end()) return;
+    // Get the moving piece
+    ChessPiece movingPiece = pieces[from];
+    PieceType pieceType = movingPiece.type;
     
-    ChessPiece movingPiece = pieceIt->second;
-    const PieceType pieceType = movingPiece.type;
-    const PieceColor pieceColor = movingPiece.color;
-    const bool isKing = (pieceType == PieceType::KING);
-    const bool isRook = (pieceType == PieceType::ROOK);
-    
-    // Update castling flags efficiently - only update if this is the first move of the king or rook
-    if (isKing) {
-        if (pieceColor == PieceColor::WHITE) {
+    // Handle castling move
+    if (pieceType == PieceType::KING && isCastlingMove(from, to)) {
+        executeCastling(from, to);
+        
+        // Update the king moved flag for the appropriate color
+        if (movingPiece.color == PieceColor::WHITE) {
             whiteKingMoved = true;
         } else {
             blackKingMoved = true;
         }
-    } else if (isRook) {
-        const int y = from.second;
-        const int x = from.first;
         
-        // Optimized rook tracking using a more efficient check
-        if (pieceColor == PieceColor::WHITE && y == 7) {
-            if (x == 0) whiteQueensideRookMoved = true;
-            else if (x == 7) whiteKingsideRookMoved = true;
-        } else if (pieceColor == PieceColor::BLACK && y == 0) {
-            if (x == 0) blackQueensideRookMoved = true;
-            else if (x == 7) blackKingsideRookMoved = true;
+        // Update rook moved flags if necessary
+        if (to.first > from.first) { // Kingside castling
+            if (movingPiece.color == PieceColor::WHITE) {
+                whiteKingsideRookMoved = true;
+            } else {
+                blackKingsideRookMoved = true;
+            }
+        } else { // Queenside castling
+            if (movingPiece.color == PieceColor::WHITE) {
+                whiteQueensideRookMoved = true;
+            } else {
+                blackQueensideRookMoved = true;
+            }
         }
-    }
-    
-    // Special handling for castling
-    if (isKing && isCastlingMove(from, to)) {
-        executeCastling(from, to);
+        
         return;
     }
     
-    // Special handling for pawn promotion
+    // Update castling flags for kings and rooks
+    if (pieceType == PieceType::KING) {
+        if (movingPiece.color == PieceColor::WHITE) {
+            whiteKingMoved = true;
+        } else {
+            blackKingMoved = true;
+        }
+    } else if (pieceType == PieceType::ROOK) {
+        if (from.first == 0 && from.second == 7) { // White queenside rook
+            whiteQueensideRookMoved = true;
+        } else if (from.first == 7 && from.second == 7) { // White kingside rook
+            whiteKingsideRookMoved = true;
+        } else if (from.first == 0 && from.second == 0) { // Black queenside rook
+            blackQueensideRookMoved = true;
+        } else if (from.first == 7 && from.second == 0) { // Black kingside rook
+            blackKingsideRookMoved = true;
+        }
+    }
+    
+    // Check if this is a pawn promotion move
     if (pieceType == PieceType::PAWN && isPromotionMove(from, to)) {
         executePromotion(from, to);
         return;
     }
     
-    // Special handling for en passant capture
-    bool isEnPassant = false;
-    BoardPosition capturedPawnPos = {-1, -1};
-    
-    if (pieceType == PieceType::PAWN && isEnPassantMove(from, to)) {
-        isEnPassant = true;
-        capturedPawnPos = {to.first, from.second};
-    }
-    
-    // Update en passant target square
-    if (pieceType == PieceType::PAWN && std::abs(to.second - from.second) == 2) {
-        // The en passant target is the square the pawn skipped over
-        enPassantTarget = {to.first, (from.second + to.second) / 2};
-    } else {
-        // Reset the en passant target if this is not a double pawn move
-        enPassantTarget = {-1, -1};
-    }
-    
     // Execute the move
     pieces.erase(from);
     
-    // Remove captured piece
-    if (isEnPassant) {
-        pieces.erase(capturedPawnPos);
-    } else {
-        auto capturedIt = pieces.find(to);
-        if (capturedIt != pieces.end()) {
-            // Remove the captured piece
-            pieces.erase(capturedIt);
-        }
+    // Remove captured piece if any
+    auto capturedIt = pieces.find(to);
+    if (capturedIt != pieces.end()) {
+        // Remove the captured piece
+        pieces.erase(capturedIt);
     }
     
     // Place the moving piece in its new position
@@ -401,24 +395,6 @@ bool ChessInteraction::isPromotionMove(const BoardPosition& from, const BoardPos
     // Check if it's reaching the opposite end
     return (piece.color == PieceColor::WHITE && to.second == 0) ||
            (piece.color == PieceColor::BLACK && to.second == 7);
-}
-
-bool ChessInteraction::isEnPassantMove(const BoardPosition& from, const BoardPosition& to) const {
-    // If there's no en passant target, return false
-    if (enPassantTarget.first == -1) return false;
-    
-    auto pieceIt = pieces.find(from);
-    if (pieceIt == pieces.end()) return false;
-    
-    const ChessPiece& piece = pieceIt->second;
-    
-    // Quick check first for performance
-    if (piece.type != PieceType::PAWN) return false;
-    
-    // Check if destination is the en passant target and it's a diagonal move
-    return to == enPassantTarget && 
-           std::abs(to.first - from.first) == 1 && 
-           std::abs(to.second - from.second) == 1;
 }
 
 void ChessInteraction::showPromotionOptions(const BoardPosition& square, PieceColor color) {
@@ -584,7 +560,7 @@ void ChessInteraction::calculateLegalMoves() {
 
 std::vector<BoardPosition> ChessInteraction::getPawnMoves(const BoardPosition& pos, const ChessPiece& piece) {
     std::vector<BoardPosition> moves;
-    moves.reserve(4); // Maximum possible pawn moves
+    moves.reserve(4); // Pawns can move to at most 4 squares
     
     const int x = pos.first;
     const int y = pos.second;
@@ -592,29 +568,26 @@ std::vector<BoardPosition> ChessInteraction::getPawnMoves(const BoardPosition& p
     // Fast check to avoid unnecessary calculations
     if (x < 0 || x >= 8 || y < 0 || y >= 8) return moves;
     
-    // Determine direction (white pawns move up the board, black pawns down)
+    // Determine the direction of pawn movement based on color
     const int direction = (piece.color == PieceColor::WHITE) ? -1 : 1;
     
-    // Forward move (can't capture)
+    // Forward move (one square)
     const int forwardY = y + direction;
-    
-    // Check if forward position is within bounds
     if (forwardY >= 0 && forwardY < 8) {
-        // Forward move (1 square)
         BoardPosition forwardPos{x, forwardY};
+        
+        // Check if the square is empty
         if (pieces.find(forwardPos) == pieces.end()) {
             moves.push_back(forwardPos);
             
-            // If pawn is in starting position, it can move two squares forward
-            const bool inStartingPos = (piece.color == PieceColor::WHITE && y == 6) || 
-                                      (piece.color == PieceColor::BLACK && y == 1);
-                                
-            if (inStartingPos) {
+            // Forward move (two squares from starting position)
+            const int startingRank = (piece.color == PieceColor::WHITE) ? 6 : 1;
+            if (y == startingRank) {
                 const int doubleForwardY = y + 2 * direction;
-                // Check if double forward position is within bounds
                 if (doubleForwardY >= 0 && doubleForwardY < 8) {
                     BoardPosition doubleForwardPos{x, doubleForwardY};
-                    // Check if both squares are empty
+                    
+                    // Check if the square is empty
                     if (pieces.find(doubleForwardPos) == pieces.end()) {
                         moves.push_back(doubleForwardPos);
                     }
@@ -623,9 +596,8 @@ std::vector<BoardPosition> ChessInteraction::getPawnMoves(const BoardPosition& p
         }
     }
     
-    // Diagonal captures - optimized using static array
-    static const int dxValues[2] = {-1, 1};
-    for (int dx : dxValues) {
+    // Capture moves (diagonally)
+    for (int dx : {-1, 1}) {
         const int captureX = x + dx;
         const int captureY = y + direction;
         
@@ -633,14 +605,9 @@ std::vector<BoardPosition> ChessInteraction::getPawnMoves(const BoardPosition& p
         if (captureX >= 0 && captureX < 8 && captureY >= 0 && captureY < 8) {
             BoardPosition capturePos{captureX, captureY};
             
-            // Check if there's an enemy piece
+            // Check if there's an enemy piece to capture
             auto it = pieces.find(capturePos);
             if (it != pieces.end() && it->second.color != piece.color) {
-                moves.push_back(capturePos);
-            }
-            
-            // Check en passant capture
-            if (capturePos == enPassantTarget) {
                 moves.push_back(capturePos);
             }
         }

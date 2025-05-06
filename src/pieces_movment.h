@@ -31,9 +31,6 @@ private:
     BoardPosition selectedSquare{-1, -1}; // (-1, -1) means no selection
     std::vector<BoardPosition> legalMoves; // Stores legal moves for selected piece
     
-    // En passant tracking
-    BoardPosition enPassantTarget{-1, -1}; // Position where en passant capture is possible
-    
     // Promotion state
     bool awaitingPromotion = false;
     BoardPosition promotionSquare{-1, -1};
@@ -93,7 +90,6 @@ private:
     void positionPieceSprite(const BoardPosition& pos);
     void executeCastling(const BoardPosition& from, const BoardPosition& to);
     bool isPromotionMove(const BoardPosition& from, const BoardPosition& to) const;
-    bool isEnPassantMove(const BoardPosition& from, const BoardPosition& to) const;
     
     // Add King moves method
     std::vector<BoardPosition> getKingMoves(const BoardPosition& pos, const ChessPiece& piece);

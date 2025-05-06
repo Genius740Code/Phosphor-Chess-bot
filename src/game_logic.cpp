@@ -10,7 +10,6 @@ ChessGameLogic::ChessGameLogic(std::map<BoardPosition, ChessPiece>& piecesRef)
       gameState(GameState::ACTIVE),
       halfMoveClock(0),
       fullMoveCounter(1),
-      enPassantAvailable(false),
       whiteKingPosition(-1, -1),
       blackKingPosition(-1, -1)
 {
@@ -47,11 +46,6 @@ std::size_t ChessGameLogic::calculateBoardHash() const {
                                
         // Mix into the overall hash
         hash ^= pieceHash + 0x9e3779b9 + (hash << 6) + (hash >> 2);
-    }
-    
-    // Also include en passant target in the hash
-    if (enPassantAvailable) {
-        hash ^= BoardPositionHash()(enPassantTarget) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
     }
     
     return hash;
@@ -744,14 +738,8 @@ std::string ChessGameLogic::getCurrentPositionFEN() const {
     // Since we don't store full castling rights, just add a placeholder
     fen << " - ";
     
-    // En passant target square
-    if (enPassantAvailable) {
-        char file = 'a' + enPassantTarget.first;
-        char rank = '8' - enPassantTarget.second;
-        fen << ' ' << file << rank;
-    } else {
-        fen << " - ";
-    }
+    // No en passant target square
+    fen << " - ";
     
     // Halfmove clock and fullmove number
     fen << ' ' << halfMoveClock << ' ' << fullMoveCounter;
@@ -768,7 +756,6 @@ void ChessGameLogic::resetGame() {
     gameState = GameState::ACTIVE;
     halfMoveClock = 0;
     fullMoveCounter = 1;
-    enPassantAvailable = false;
     
     // Clear position history
     positionHistory.clear();
@@ -987,11 +974,6 @@ bool ChessGameLogic::isValidPawnMove(const BoardPosition& from, const BoardPosit
         // Normal capture - check if the target square has an opponent's piece
         auto it = pieces.find(to);
         if (it != pieces.end() && it->second.color != color) {
-            return true;
-        }
-        
-        // En passant capture
-        if (enPassantAvailable && to == enPassantTarget) {
             return true;
         }
     }
@@ -1254,17 +1236,6 @@ void ChessGameLogic::executeMove(const BoardPosition& from, const BoardPosition&
         isCapture = true;
     }
     
-    // Check for en passant capture
-    bool isEnPassantCapture = false;
-    BoardPosition capturedPawnPos = {-1, -1};
-    
-    if (movingPiece.type == PieceType::PAWN && enPassantAvailable && to == enPassantTarget) {
-        isEnPassantCapture = true;
-        isCapture = true;
-        // The captured pawn is on the same file as the destination but on the same rank as the source
-        capturedPawnPos = {to.first, from.second};
-    }
-    
     // Update the halfmove clock (reset on pawn move or capture)
     if (movingPiece.type == PieceType::PAWN || isCapture) {
         halfMoveClock = 0;
@@ -1277,24 +1248,8 @@ void ChessGameLogic::executeMove(const BoardPosition& from, const BoardPosition&
         fullMoveCounter++;
     }
     
-    // Set the en passant target square if this is a double pawn move
-    if (movingPiece.type == PieceType::PAWN && std::abs(to.second - from.second) == 2) {
-        enPassantTarget = {to.first, (from.second + to.second) / 2};
-        enPassantAvailable = true;
-    } else {
-        enPassantTarget = {-1, -1};
-        enPassantAvailable = false;
-    }
-    
     // Execute the move
     pieces.erase(from);
-    
-    // Remove captured piece
-    if (isEnPassantCapture) {
-        pieces.erase(capturedPawnPos);
-    } else if (isCapture) {
-        // Normal capture - the target piece will be replaced with the moving piece
-    }
     
     // Place the moving piece in its new position
     pieces[to] = movingPiece;
